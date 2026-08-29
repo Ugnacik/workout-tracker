@@ -21,8 +21,8 @@ void main() {
         .customSelect('PRAGMA user_version')
         .getSingle();
     final catalog = await repository.loadCatalog();
-    expect(database.schemaVersion, 1);
-    expect(version.read<int>('user_version'), 1);
+    expect(database.schemaVersion, 2);
+    expect(version.read<int>('user_version'), 2);
     expect(
       catalog.exercises.any((item) => item.name == 'Neutral-grip pull-up'),
       isTrue,
@@ -69,7 +69,7 @@ void main() {
       await repository.addExercise(session.id, exercise);
       final set =
           (await repository.loadActiveWorkout())!.exercises.single.sets.single;
-      await repository.updateSet(
+      await repository.completeSet(
         setId: set.id,
         reps: 8,
         bodyweightAdjustmentKg: 12,
@@ -88,8 +88,8 @@ void main() {
         8,
       );
       expect(
-        await repository.previousPerformance(exercise),
-        contains('assisted'),
+        (await repository.previousSets(exercise)).single.adjustment,
+        BodyweightAdjustment.assisted,
       );
     },
   );
@@ -105,9 +105,51 @@ void main() {
     await repository.addExercise(session.id, pulldown);
     final set =
         (await repository.loadActiveWorkout())!.exercises.single.sets.single;
-    await repository.updateSet(setId: set.id, reps: 10, loadKg: 55);
+    await repository.completeSet(setId: set.id, reps: 10, loadKg: 55);
     await repository.changeWorkoutLocation(session.id, secondGym.id);
     await repository.finishWorkout(session.id);
-    expect(await repository.previousPerformance(pulldown), contains('55.0 kg'));
+    expect((await repository.previousSets(pulldown)).single.loadKg, 55);
+  });
+
+  test('finish omits unchecked sets and empty exercises', () async {
+    final location = (await repository.loadLocations()).single;
+    final exercise = (await repository.loadCatalog()).exercises.first;
+    final session = await repository.startWorkout(location.id);
+    await repository.addExercise(session.id, exercise);
+    final result = await repository.finishWorkout(session.id);
+    expect(result.omittedSetCount, 1);
+    expect((await repository.loadHistory()).single.exercises, isEmpty);
+  });
+
+  test('routine preserves exercise order, machine, and set count', () async {
+    final catalog = await repository.loadCatalog();
+    final location = (await repository.loadLocations()).single;
+    final machineExercise = catalog.exercises
+        .firstWhere((item) => item.equipmentType == EquipmentType.machine)
+        .withMachine(catalog.machines.first);
+    final session = await repository.startWorkout(location.id);
+    await repository.addExercise(session.id, machineExercise);
+    final active = (await repository.loadActiveWorkout())!;
+    await repository.addSet(active.exercises.single.id);
+    final updated = (await repository.loadActiveWorkout())!;
+    final routine = await repository.saveWorkoutAsRoutine(
+      workout: updated,
+      name: 'Pull day',
+    );
+    expect(routine.exercises.single.setCount, 2);
+    expect(
+      routine.exercises.single.exercise.machineModel?.id,
+      machineExercise.machineModel?.id,
+    );
+    await repository.discardWorkout(session.id);
+    final fromRoutine = await repository.startWorkoutFromRoutine(
+      location.id,
+      routine.id,
+    );
+    expect(fromRoutine.exercises.single.sets, hasLength(2));
+    expect(
+      fromRoutine.exercises.single.exercise.machineModel?.id,
+      machineExercise.machineModel?.id,
+    );
   });
 }

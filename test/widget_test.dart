@@ -23,6 +23,8 @@ void main() {
     expect(find.text('Ready when you are'), findsOneWidget);
     await tester.tap(find.text('Start workout'));
     await tester.pumpAndSettle();
+    await tester.tap(find.text('Start empty'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Add exercise'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Back'));
@@ -35,6 +37,9 @@ void main() {
     expect(find.text('Neutral-grip pull-up'), findsOneWidget);
     await tester.enterText(find.byType(TextField).first, '8');
     await tester.pump();
+    await tester.tap(find.byIcon(Icons.radio_button_unchecked));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Rest 1:'), findsOneWidget);
     await tester.tap(find.text('Finish'));
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(FilledButton, 'Finish'));
@@ -44,6 +49,17 @@ void main() {
     await tester.tap(find.textContaining('1 exercises'));
     await tester.pumpAndSettle();
     expect(find.textContaining('8 reps'), findsOneWidget);
+    await tester.tap(find.text('Save as routine'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'Pull day');
+    await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Workout'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Start workout'));
+    await tester.pumpAndSettle();
+    expect(find.text('Pull day'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox.shrink());
     await database.close();
   });
 }

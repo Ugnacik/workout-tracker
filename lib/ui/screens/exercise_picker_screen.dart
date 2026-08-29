@@ -260,7 +260,7 @@ class _ExercisePickerScreenState extends ConsumerState<ExercisePickerScreen> {
       if (machine == null) return;
       selected = exercise.withMachine(machine);
     }
-    final previous = await controller.previousPerformance(selected);
+    final previous = await controller.previousSets(selected);
     if (!mounted) return;
     final add = await showModalBottomSheet<bool>(
       context: context,
@@ -303,9 +303,9 @@ class _ExercisePickerScreenState extends ConsumerState<ExercisePickerScreen> {
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: Text(
-                  previous == null
+                  previous.isEmpty
                       ? 'No previous performance for this setup.'
-                      : 'Previous best: $previous',
+                      : 'Last workout: ${_previousSummary(previous, selected, controller.weightUnit)}',
                 ),
               ),
               const SizedBox(height: 18),
@@ -615,3 +615,31 @@ IconData _equipmentIcon(EquipmentType type) => switch (type) {
   EquipmentType.machine => Icons.precision_manufacturing_outlined,
   EquipmentType.other => Icons.category_outlined,
 };
+
+String _previousSummary(
+  List<PreviousSetSnapshot> sets,
+  ExerciseChoice exercise,
+  WeightUnit unit,
+) {
+  return sets
+      .take(3)
+      .map((set) {
+        final kilograms = exercise.equipmentType == EquipmentType.bodyweight
+            ? set.bodyweightAdjustmentKg
+            : set.loadKg;
+        final load = kilograms == null
+            ? ''
+            : ' × ${_compactPrevious(unit.fromKilograms(kilograms))} ${unit.shortLabel}';
+        final kind =
+            exercise.equipmentType == EquipmentType.bodyweight &&
+                set.adjustment != BodyweightAdjustment.none
+            ? ' ${set.adjustment == BodyweightAdjustment.assisted ? 'assisted' : 'added'}'
+            : '';
+        return '${set.reps}$load$kind';
+      })
+      .join(' · ');
+}
+
+String _compactPrevious(double value) => value == value.roundToDouble()
+    ? '${value.round()}'
+    : value.toStringAsFixed(1);

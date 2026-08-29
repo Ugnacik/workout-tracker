@@ -99,11 +99,33 @@ class WorkoutSetModel {
     this.loadKg,
     this.bodyweightAdjustmentKg,
     this.adjustment = BodyweightAdjustment.none,
+    this.isCompleted = false,
+    this.completedAt,
   });
 
   final String id;
   final int position;
   final int reps;
+  final double? loadKg;
+  final double? bodyweightAdjustmentKg;
+  final BodyweightAdjustment adjustment;
+  final bool isCompleted;
+  final DateTime? completedAt;
+}
+
+class PreviousSetSnapshot {
+  const PreviousSetSnapshot({
+    required this.position,
+    required this.reps,
+    required this.performedAt,
+    this.loadKg,
+    this.bodyweightAdjustmentKg,
+    this.adjustment = BodyweightAdjustment.none,
+  });
+
+  final int position;
+  final int reps;
+  final DateTime performedAt;
   final double? loadKg;
   final double? bodyweightAdjustmentKg;
   final BodyweightAdjustment adjustment;
@@ -137,6 +159,41 @@ class WorkoutSessionModel {
   final DateTime startedAt;
   final DateTime? finishedAt;
   final List<WorkoutExerciseModel> exercises;
+}
+
+class RoutineExerciseModel {
+  const RoutineExerciseModel({
+    required this.id,
+    required this.position,
+    required this.exercise,
+    required this.setCount,
+  });
+
+  final String id;
+  final int position;
+  final ExerciseChoice exercise;
+  final int setCount;
+}
+
+class WorkoutRoutineModel {
+  const WorkoutRoutineModel({
+    required this.id,
+    required this.name,
+    required this.createdAt,
+    required this.updatedAt,
+    required this.exercises,
+  });
+
+  final String id;
+  final String name;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  final List<RoutineExerciseModel> exercises;
+}
+
+class FinishWorkoutResult {
+  const FinishWorkoutResult({required this.omittedSetCount});
+  final int omittedSetCount;
 }
 
 class GymLocationModel {

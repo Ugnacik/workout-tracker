@@ -20,6 +20,8 @@ void main() {
     expect(find.text('Start workout'), findsOneWidget);
     await tester.tap(find.text('Start workout'));
     await tester.pumpAndSettle();
+    await tester.tap(find.text('Start empty'));
+    await tester.pumpAndSettle();
     expect(find.text('Add exercise'), findsOneWidget);
     await database.close();
   });

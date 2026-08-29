@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../domain/models.dart';
 import '../../state/app_controller.dart';
+import '../../services/rest_timer_service.dart';
 
 class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
@@ -18,6 +19,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
     final controller = ref.watch(appControllerProvider);
+    final timer = ref.watch(restTimerProvider);
     if (controller.isLoading) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
@@ -52,6 +54,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         title: Text(titles[_tab]),
         actions: _tab == 0 && controller.activeWorkout != null
             ? [
+                IconButton(
+                  tooltip: 'Save as routine',
+                  onPressed: () => _saveRoutine(controller.activeWorkout!),
+                  icon: const Icon(Icons.bookmark_add_outlined),
+                ),
                 TextButton(
                   onPressed: () => _finishWorkout(controller),
                   child: const Text('Finish'),
@@ -68,24 +75,30 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           SettingsTab(controller: controller),
         ],
       ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _tab,
-        onDestinationSelected: (value) => setState(() => _tab = value),
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.fitness_center_outlined),
-            selectedIcon: Icon(Icons.fitness_center),
-            label: 'Workout',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.history_outlined),
-            selectedIcon: Icon(Icons.history),
-            label: 'History',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.tune_outlined),
-            selectedIcon: Icon(Icons.tune),
-            label: 'Settings',
+      bottomNavigationBar: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (timer.isRunning) RestTimerBar(timer: timer),
+          NavigationBar(
+            selectedIndex: _tab,
+            onDestinationSelected: (value) => setState(() => _tab = value),
+            destinations: const [
+              NavigationDestination(
+                icon: Icon(Icons.fitness_center_outlined),
+                selectedIcon: Icon(Icons.fitness_center),
+                label: 'Workout',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.history_outlined),
+                selectedIcon: Icon(Icons.history),
+                label: 'History',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.tune_outlined),
+                selectedIcon: Icon(Icons.tune),
+                label: 'Settings',
+              ),
+            ],
           ),
         ],
       ),
@@ -95,9 +108,19 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   Future<void> _finishWorkout(AppController controller) async {
     final workout = controller.activeWorkout;
     if (workout == null) return;
-    if (workout.exercises.isEmpty) {
+    final completedSets = workout.exercises.fold<int>(
+      0,
+      (total, exercise) =>
+          total + exercise.sets.where((set) => set.isCompleted).length,
+    );
+    final incompleteSets = workout.exercises.fold<int>(
+      0,
+      (total, exercise) =>
+          total + exercise.sets.where((set) => !set.isCompleted).length,
+    );
+    if (completedSets == 0) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Add at least one exercise first.')),
+        const SnackBar(content: Text('Complete at least one set first.')),
       );
       return;
     }
@@ -106,7 +129,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       builder: (context) => AlertDialog(
         title: const Text('Finish workout?'),
         content: Text(
-          '${workout.exercises.length} exercises will be saved to your history.',
+          incompleteSets == 0
+              ? '$completedSets completed sets will be saved to your history.'
+              : '$completedSets completed sets will be saved. $incompleteSets unchecked sets will be omitted.',
         ),
         actions: [
           TextButton(
@@ -124,6 +149,27 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       await controller.finishWorkout();
       if (mounted) setState(() => _tab = 1);
     }
+  }
+
+  Future<void> _saveRoutine(WorkoutSessionModel workout) async {
+    final name = await _askForName('Save workout as routine');
+    if (name == null || name.isEmpty) return;
+    await ref.read(appControllerProvider).saveWorkoutAsRoutine(workout, name);
+    if (mounted) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Saved “$name” as a routine.')));
+    }
+  }
+
+  Future<String?> _askForName(String title) async {
+    return showDialog<String>(
+      context: context,
+      builder: (context) => _TextPromptDialog(
+        title: title,
+        label: 'Routine name',
+        actionLabel: 'Save',
+      ),
+    );
   }
 }
 
@@ -171,7 +217,7 @@ class WorkoutTab extends StatelessWidget {
               SizedBox(
                 width: double.infinity,
                 child: FilledButton.icon(
-                  onPressed: controller.startWorkout,
+                  onPressed: () => _chooseStart(context),
                   icon: const Icon(Icons.play_arrow),
                   label: const Text('Start workout'),
                 ),
@@ -278,6 +324,115 @@ class WorkoutTab extends StatelessWidget {
       ),
     );
     if (discard == true) await controller.discardWorkout();
+  }
+
+  Future<void> _chooseStart(BuildContext context) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Start workout',
+                style: Theme.of(context).textTheme.headlineSmall
+                    ?.copyWith(fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 14),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: () async {
+                    Navigator.pop(sheetContext);
+                    await controller.startWorkout();
+                  },
+                  icon: const Icon(Icons.add),
+                  label: const Text('Start empty'),
+                ),
+              ),
+              if (controller.routines.isNotEmpty) ...[
+                const SizedBox(height: 18),
+                const _SectionLabel('SAVED ROUTINES'),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 420),
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: controller.routines.length,
+                    separatorBuilder: (_, _) => const SizedBox(height: 8),
+                    itemBuilder: (context, index) {
+                      final routine = controller.routines[index];
+                      final setCount = routine.exercises.fold<int>(
+                        0,
+                        (total, exercise) => total + exercise.setCount,
+                      );
+                      return Card(
+                        child: ListTile(
+                          title: Text(
+                            routine.name,
+                            style: const TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                          subtitle: Text(
+                            '${routine.exercises.length} exercises · $setCount sets',
+                          ),
+                          trailing: PopupMenuButton<String>(
+                            onSelected: (value) async {
+                              if (value == 'rename') {
+                                await _renameRoutine(context, routine);
+                              } else if (value == 'delete') {
+                                await controller.deleteRoutine(routine.id);
+                              }
+                            },
+                            itemBuilder: (_) => const [
+                              PopupMenuItem(
+                                value: 'rename',
+                                child: Text('Rename'),
+                              ),
+                              PopupMenuItem(
+                                value: 'delete',
+                                child: Text('Delete'),
+                              ),
+                            ],
+                          ),
+                          onTap: () async {
+                            Navigator.pop(sheetContext);
+                            await controller.startWorkoutFromRoutine(
+                              routine.id,
+                            );
+                          },
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _renameRoutine(
+    BuildContext context,
+    WorkoutRoutineModel routine,
+  ) async {
+    final name = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => _TextPromptDialog(
+        title: 'Rename routine',
+        label: 'Routine name',
+        actionLabel: 'Save',
+        initialValue: routine.name,
+      ),
+    );
+    if (name != null && name.isNotEmpty) {
+      await controller.renameRoutine(routine.id, name);
+    }
   }
 }
 
@@ -392,15 +547,29 @@ class ExerciseLogCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 14),
-            ...exercise.sets.asMap().entries.map(
-              (setEntry) => SetEditorRow(
-                key: ValueKey(setEntry.value.id),
-                controller: controller,
-                exercise: choice,
-                set: setEntry.value,
-                isFirst: setEntry.key == 0,
-                isLast: setEntry.key == exercise.sets.length - 1,
-              ),
+            FutureBuilder<List<PreviousSetSnapshot>>(
+              future: controller.previousSets(choice),
+              builder: (context, snapshot) {
+                final previous = snapshot.data ?? const <PreviousSetSnapshot>[];
+                return Column(
+                  children: exercise.sets.asMap().entries.map((setEntry) {
+                    final prior = previous
+                        .where(
+                          (item) => item.position == setEntry.value.position,
+                        )
+                        .firstOrNull;
+                    return SetEditorRow(
+                      key: ValueKey(setEntry.value.id),
+                      controller: controller,
+                      exercise: choice,
+                      set: setEntry.value,
+                      previous: prior,
+                      isFirst: setEntry.key == 0,
+                      isLast: setEntry.key == exercise.sets.length - 1,
+                    );
+                  }).toList(),
+                );
+              },
             ),
             const SizedBox(height: 6),
             TextButton.icon(
@@ -421,12 +590,14 @@ class SetEditorRow extends StatefulWidget {
     required this.controller,
     required this.exercise,
     required this.set,
+    required this.previous,
     required this.isFirst,
     required this.isLast,
   });
   final AppController controller;
   final ExerciseChoice exercise;
   final WorkoutSetModel set;
+  final PreviousSetSnapshot? previous;
   final bool isFirst;
   final bool isLast;
 
@@ -438,23 +609,49 @@ class _SetEditorRowState extends State<SetEditorRow> {
   late final TextEditingController reps;
   late final TextEditingController load;
   late BodyweightAdjustment adjustment;
+  late WeightUnit _displayUnit;
 
   @override
   void initState() {
     super.initState();
-    reps = TextEditingController(
-      text: widget.set.reps == 0 ? '' : '${widget.set.reps}',
-    );
+    reps = TextEditingController();
+    load = TextEditingController();
+    _syncFromWidget();
+  }
+
+  @override
+  void didUpdateWidget(covariant SetEditorRow oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_displayUnit != widget.controller.weightUnit ||
+        oldWidget.set.reps != widget.set.reps ||
+        oldWidget.set.loadKg != widget.set.loadKg ||
+        oldWidget.set.bodyweightAdjustmentKg !=
+            widget.set.bodyweightAdjustmentKg ||
+        oldWidget.set.adjustment != widget.set.adjustment ||
+        oldWidget.set.isCompleted != widget.set.isCompleted) {
+      _syncFromWidget();
+    } else if (oldWidget.previous != widget.previous &&
+        widget.set.reps == 0 &&
+        reps.text.isEmpty) {
+      adjustment = widget.previous?.adjustment ?? adjustment;
+    }
+  }
+
+  void _syncFromWidget() {
+    _displayUnit = widget.controller.weightUnit;
+    reps.text = widget.set.reps == 0 ? '' : '${widget.set.reps}';
     final kilograms = widget.exercise.equipmentType == EquipmentType.bodyweight
         ? widget.set.bodyweightAdjustmentKg
         : widget.set.loadKg;
     final displayed = kilograms == null
         ? null
         : widget.controller.weightUnit.fromKilograms(kilograms);
-    load = TextEditingController(
-      text: displayed == null ? '' : _compact(displayed),
-    );
-    adjustment = widget.set.adjustment;
+    load.text = displayed == null ? '' : _compact(displayed);
+    adjustment =
+        widget.set.adjustment == BodyweightAdjustment.none &&
+            widget.set.bodyweightAdjustmentKg == null
+        ? widget.previous?.adjustment ?? BodyweightAdjustment.none
+        : widget.set.adjustment;
   }
 
   @override
@@ -487,6 +684,49 @@ class _SetEditorRowState extends State<SetEditorRow> {
     );
   }
 
+  double? _previousDisplayedLoad() {
+    final previous = widget.previous;
+    if (previous == null) return null;
+    final kilograms = widget.exercise.equipmentType == EquipmentType.bodyweight
+        ? previous.bodyweightAdjustmentKg
+        : previous.loadKg;
+    return kilograms == null
+        ? null
+        : widget.controller.weightUnit.fromKilograms(kilograms);
+  }
+
+  Future<void> _toggleCompleted() async {
+    if (widget.set.isCompleted) {
+      await widget.controller.reopenSet(widget.set.id);
+      return;
+    }
+    final repsValue = int.tryParse(reps.text) ?? widget.previous?.reps ?? 0;
+    if (repsValue <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Enter reps before completing the set.')),
+      );
+      return;
+    }
+    final displayedLoad =
+        double.tryParse(load.text.replaceAll(',', '.')) ??
+        _previousDisplayedLoad();
+    final kilograms = displayedLoad == null
+        ? null
+        : widget.controller.weightUnit.toKilograms(displayedLoad);
+    final bodyweight =
+        widget.exercise.equipmentType == EquipmentType.bodyweight;
+    await widget.controller.completeSet(
+      setId: widget.set.id,
+      reps: repsValue,
+      loadKg: bodyweight ? null : kilograms,
+      bodyweightAdjustmentKg:
+          bodyweight && adjustment != BodyweightAdjustment.none
+          ? kilograms
+          : null,
+      adjustment: bodyweight ? adjustment : BodyweightAdjustment.none,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final bodyweight =
@@ -497,24 +737,43 @@ class _SetEditorRowState extends State<SetEditorRow> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 26,
-            child: Padding(
-              padding: const EdgeInsets.only(top: 16),
-              child: Text(
-                '${widget.set.position + 1}',
-                style: const TextStyle(
-                  fontWeight: FontWeight.w700,
-                  color: Colors.black54,
+            width: 42,
+            child: Column(
+              children: [
+                Text(
+                  '${widget.set.position + 1}',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.black54,
+                  ),
                 ),
-              ),
+                IconButton(
+                  tooltip: widget.set.isCompleted
+                      ? 'Reopen set'
+                      : 'Complete set',
+                  color: Theme.of(context).colorScheme.primary,
+                  onPressed: _toggleCompleted,
+                  icon: Icon(
+                    widget.set.isCompleted
+                        ? Icons.check_circle
+                        : Icons.radio_button_unchecked,
+                  ),
+                ),
+              ],
             ),
           ),
           Expanded(
             child: TextField(
               controller: reps,
+              enabled: !widget.set.isCompleted,
               keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: 'Reps',
+                hintText: widget.previous == null
+                    ? null
+                    : '${widget.previous!.reps}',
+                floatingLabelBehavior: FloatingLabelBehavior.always,
                 isDense: true,
               ),
               onChanged: (_) => _save(),
@@ -525,7 +784,15 @@ class _SetEditorRowState extends State<SetEditorRow> {
             SizedBox(
               width: 108,
               child: DropdownButtonFormField<BodyweightAdjustment>(
+                key: ValueKey(adjustment),
                 initialValue: adjustment,
+                disabledHint: Text(
+                  adjustment == BodyweightAdjustment.none
+                      ? 'Body'
+                      : adjustment == BodyweightAdjustment.added
+                      ? 'Added'
+                      : 'Assist',
+                ),
                 isExpanded: true,
                 decoration: const InputDecoration(
                   labelText: 'Load',
@@ -545,12 +812,14 @@ class _SetEditorRowState extends State<SetEditorRow> {
                     child: Text('Assist'),
                   ),
                 ],
-                onChanged: (value) {
-                  setState(
-                    () => adjustment = value ?? BodyweightAdjustment.none,
-                  );
-                  _save();
-                },
+                onChanged: widget.set.isCompleted
+                    ? null
+                    : (value) {
+                        setState(
+                          () => adjustment = value ?? BodyweightAdjustment.none,
+                        );
+                        _save();
+                      },
               ),
             ),
           if (!bodyweight || adjustment != BodyweightAdjustment.none) ...[
@@ -559,11 +828,16 @@ class _SetEditorRowState extends State<SetEditorRow> {
               width: 82,
               child: TextField(
                 controller: load,
+                enabled: !widget.set.isCompleted,
                 keyboardType: const TextInputType.numberWithOptions(
                   decimal: true,
                 ),
                 decoration: InputDecoration(
                   labelText: widget.controller.weightUnit.shortLabel,
+                  hintText: _previousDisplayedLoad() == null
+                      ? null
+                      : _compact(_previousDisplayedLoad()!),
+                  floatingLabelBehavior: FloatingLabelBehavior.always,
                   isDense: true,
                 ),
                 onChanged: (_) => _save(),
@@ -650,8 +924,11 @@ class HistoryTab extends StatelessWidget {
               context: context,
               showDragHandle: true,
               isScrollControlled: true,
-              builder: (context) =>
-                  _HistoryDetail(session: session, unit: controller.weightUnit),
+              builder: (context) => _HistoryDetail(
+                session: session,
+                unit: controller.weightUnit,
+                controller: controller,
+              ),
             ),
           ),
         );
@@ -661,9 +938,14 @@ class HistoryTab extends StatelessWidget {
 }
 
 class _HistoryDetail extends StatelessWidget {
-  const _HistoryDetail({required this.session, required this.unit});
+  const _HistoryDetail({
+    required this.session,
+    required this.unit,
+    required this.controller,
+  });
   final WorkoutSessionModel session;
   final WeightUnit unit;
+  final AppController controller;
   @override
   Widget build(BuildContext context) => SafeArea(
     child: DraggableScrollableSheet(
@@ -681,6 +963,12 @@ class _HistoryDetail extends StatelessWidget {
           Text(
             session.gymLocationName,
             style: const TextStyle(color: Colors.black54),
+          ),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: () => _saveAsRoutine(context),
+            icon: const Icon(Icons.bookmark_add_outlined),
+            label: const Text('Save as routine'),
           ),
           const SizedBox(height: 20),
           ...session.exercises.map(
@@ -713,6 +1001,21 @@ class _HistoryDetail extends StatelessWidget {
       ),
     ),
   );
+
+  Future<void> _saveAsRoutine(BuildContext context) async {
+    final name = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => const _TextPromptDialog(
+        title: 'Save workout as routine',
+        label: 'Routine name',
+        actionLabel: 'Save',
+      ),
+    );
+    if (name != null && name.isNotEmpty) {
+      await controller.saveWorkoutAsRoutine(session, name);
+      if (context.mounted) Navigator.pop(context);
+    }
+  }
 }
 
 class SettingsTab extends StatelessWidget {
@@ -746,6 +1049,42 @@ class SettingsTab extends StatelessWidget {
           ),
         ),
       ),
+      const SizedBox(height: 22),
+      const _SectionLabel('REST TIMER'),
+      Card(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<int>(
+              value: controller.restTimer.durationSeconds,
+              isExpanded: true,
+              items: const [60, 90, 120, 180]
+                  .map(
+                    (seconds) => DropdownMenuItem(
+                      value: seconds,
+                      child: Text(
+                        seconds < 60
+                            ? '$seconds seconds'
+                            : '${seconds ~/ 60}${seconds % 60 == 0 ? '' : ':${(seconds % 60).toString().padLeft(2, '0')}'} minutes',
+                      ),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (value) {
+                if (value != null) controller.setRestTimerSeconds(value);
+              },
+            ),
+          ),
+        ),
+      ),
+      if (controller.restTimer.permissionDenied)
+        const Padding(
+          padding: EdgeInsets.fromLTRB(4, 8, 4, 0),
+          child: Text(
+            'Notification permission is off. The timer will still work while the app is open.',
+            style: TextStyle(color: Colors.black54),
+          ),
+        ),
       const SizedBox(height: 22),
       const _SectionLabel('GYM LOCATIONS'),
       Card(
@@ -788,30 +1127,14 @@ class SettingsTab extends StatelessWidget {
   );
 
   Future<void> _addLocation(BuildContext context) async {
-    final text = TextEditingController();
     final name = await showDialog<String>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Add gym location'),
-        content: TextField(
-          controller: text,
-          autofocus: true,
-          textCapitalization: TextCapitalization.words,
-          decoration: const InputDecoration(labelText: 'Name'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, text.text.trim()),
-            child: const Text('Add'),
-          ),
-        ],
+      builder: (context) => const _TextPromptDialog(
+        title: 'Add gym location',
+        label: 'Name',
+        actionLabel: 'Add',
       ),
     );
-    text.dispose();
     if (name != null && name.isNotEmpty) await controller.addLocation(name);
   }
 }
@@ -832,6 +1155,97 @@ class _SectionLabel extends StatelessWidget {
       ),
     ),
   );
+}
+
+class RestTimerBar extends StatelessWidget {
+  const RestTimerBar({super.key, required this.timer});
+  final RestTimerService timer;
+
+  @override
+  Widget build(BuildContext context) {
+    final remaining = timer.remainingSeconds;
+    final minutes = remaining ~/ 60;
+    final seconds = (remaining % 60).toString().padLeft(2, '0');
+    return Material(
+      color: Theme.of(context).colorScheme.primaryContainer,
+      child: SafeArea(
+        top: false,
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Row(
+            children: [
+              const Icon(Icons.timer_outlined, size: 20),
+              const SizedBox(width: 8),
+              Text(
+                'Rest $minutes:$seconds',
+                style: const TextStyle(fontWeight: FontWeight.w800),
+              ),
+              const Spacer(),
+              TextButton(
+                onPressed: timer.addThirtySeconds,
+                child: const Text('+30 sec'),
+              ),
+              TextButton(onPressed: timer.skip, child: const Text('Skip')),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TextPromptDialog extends StatefulWidget {
+  const _TextPromptDialog({
+    required this.title,
+    required this.label,
+    required this.actionLabel,
+    this.initialValue,
+  });
+
+  final String title;
+  final String label;
+  final String actionLabel;
+  final String? initialValue;
+
+  @override
+  State<_TextPromptDialog> createState() => _TextPromptDialogState();
+}
+
+class _TextPromptDialogState extends State<_TextPromptDialog> {
+  late final TextEditingController text = TextEditingController(
+    text: widget.initialValue,
+  );
+
+  @override
+  void dispose() {
+    text.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: Text(widget.title),
+    content: TextField(
+      controller: text,
+      autofocus: true,
+      textCapitalization: TextCapitalization.words,
+      decoration: InputDecoration(labelText: widget.label),
+      onSubmitted: (_) => _submit(),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('Cancel'),
+      ),
+      FilledButton(onPressed: _submit, child: Text(widget.actionLabel)),
+    ],
+  );
+
+  void _submit() {
+    final value = text.text.trim();
+    if (value.isNotEmpty) Navigator.pop(context, value);
+  }
 }
 
 String _setSummary(

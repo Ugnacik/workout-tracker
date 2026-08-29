@@ -5,6 +5,7 @@ import '../data/app_database.dart';
 import '../data/drift_workout_repository.dart';
 import '../domain/models.dart';
 import '../domain/workout_repository.dart';
+import '../services/rest_timer_service.dart';
 
 final databaseProvider = Provider<AppDatabase>((ref) {
   final database = AppDatabase();
@@ -16,16 +17,33 @@ final repositoryProvider = Provider<WorkoutRepository>(
   (ref) => DriftWorkoutRepository(ref.watch(databaseProvider)),
 );
 
+final restTimerNotificationsProvider = Provider<RestTimerNotifications>(
+  (ref) => LocalRestTimerNotifications(),
+);
+
+final restTimerProvider = ChangeNotifierProvider<RestTimerService>((ref) {
+  return RestTimerService(
+    ref.watch(repositoryProvider),
+    ref.watch(restTimerNotificationsProvider),
+  );
+});
+
 final appControllerProvider = ChangeNotifierProvider<AppController>(
-  (ref) => AppController(ref.watch(repositoryProvider))..initialize(),
+  (ref) => AppController(
+    ref.watch(repositoryProvider),
+    ref.read(restTimerProvider),
+  )..initialize(),
 );
 
 class AppController extends ChangeNotifier {
-  AppController(this.repository);
+  AppController(this.repository, this.restTimer);
 
   final WorkoutRepository repository;
+  final RestTimerService restTimer;
+  final Map<String, Future<void>> _pendingSetWrites = {};
   bool isLoading = true;
   Object? error;
+  Object? actionError;
   CatalogSnapshot catalog = const CatalogSnapshot(
     muscles: [],
     patterns: [],
@@ -34,6 +52,7 @@ class AppController extends ChangeNotifier {
   );
   List<GymLocationModel> locations = const [];
   List<WorkoutSessionModel> history = const [];
+  List<WorkoutRoutineModel> routines = const [];
   WorkoutSessionModel? activeWorkout;
   WeightUnit weightUnit = WeightUnit.kilograms;
 
@@ -44,6 +63,7 @@ class AppController extends ChangeNotifier {
   Future<void> initialize() async {
     try {
       await repository.initialize();
+      await restTimer.initialize();
       await refresh();
     } catch (exception) {
       error = exception;
@@ -58,6 +78,7 @@ class AppController extends ChangeNotifier {
     weightUnit = await repository.loadWeightUnit();
     activeWorkout = await repository.loadActiveWorkout();
     history = await repository.loadHistory();
+    routines = await repository.loadRoutines();
     error = null;
     isLoading = false;
     notifyListeners();
@@ -70,6 +91,16 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> startWorkoutFromRoutine(String routineId) async {
+    final location = defaultLocation;
+    if (location == null) return;
+    activeWorkout = await repository.startWorkoutFromRoutine(
+      location.id,
+      routineId,
+    );
+    notifyListeners();
+  }
+
   Future<void> changeWorkoutLocation(String locationId) async {
     final workout = activeWorkout;
     if (workout == null) return;
@@ -77,8 +108,8 @@ class AppController extends ChangeNotifier {
     await _refreshWorkout();
   }
 
-  Future<String?> previousPerformance(ExerciseChoice exercise) =>
-      repository.previousPerformance(exercise);
+  Future<List<PreviousSetSnapshot>> previousSets(ExerciseChoice exercise) =>
+      repository.previousSets(exercise);
 
   Future<void> addExercise(ExerciseChoice exercise) async {
     final workout = activeWorkout;
@@ -108,13 +139,41 @@ class AppController extends ChangeNotifier {
     double? loadKg,
     double? bodyweightAdjustmentKg,
     BodyweightAdjustment adjustment = BodyweightAdjustment.none,
-  }) => repository.updateSet(
-    setId: setId,
-    reps: reps,
-    loadKg: loadKg,
-    bodyweightAdjustmentKg: bodyweightAdjustmentKg,
-    adjustment: adjustment,
+  }) => _enqueueSetWrite(
+    setId,
+    () => repository.updateSet(
+      setId: setId,
+      reps: reps,
+      loadKg: loadKg,
+      bodyweightAdjustmentKg: bodyweightAdjustmentKg,
+      adjustment: adjustment,
+    ),
   );
+
+  Future<void> completeSet({
+    required String setId,
+    required int reps,
+    double? loadKg,
+    double? bodyweightAdjustmentKg,
+    BodyweightAdjustment adjustment = BodyweightAdjustment.none,
+  }) async {
+    await flushSetWrites(setId);
+    await repository.completeSet(
+      setId: setId,
+      reps: reps,
+      loadKg: loadKg,
+      bodyweightAdjustmentKg: bodyweightAdjustmentKg,
+      adjustment: adjustment,
+    );
+    await _refreshWorkout();
+    await restTimer.start();
+  }
+
+  Future<void> reopenSet(String setId) async {
+    await flushSetWrites(setId);
+    await repository.reopenSet(setId);
+    await _refreshWorkout();
+  }
 
   Future<void> duplicateSet(String id) async {
     await repository.duplicateSet(id);
@@ -131,11 +190,13 @@ class AppController extends ChangeNotifier {
     await _refreshWorkout();
   }
 
-  Future<void> finishWorkout() async {
+  Future<FinishWorkoutResult?> finishWorkout() async {
     final workout = activeWorkout;
-    if (workout == null) return;
-    await repository.finishWorkout(workout.id);
+    if (workout == null) return null;
+    await flushSetWrites();
+    final result = await repository.finishWorkout(workout.id);
     await refresh();
+    return result;
   }
 
   Future<void> discardWorkout() async {
@@ -146,10 +207,15 @@ class AppController extends ChangeNotifier {
   }
 
   Future<void> setWeightUnit(WeightUnit unit) async {
+    await flushSetWrites();
     await repository.setWeightUnit(unit);
     weightUnit = unit;
+    activeWorkout = await repository.loadActiveWorkout();
     notifyListeners();
   }
+
+  Future<void> setRestTimerSeconds(int seconds) =>
+      restTimer.setDuration(seconds);
 
   Future<void> setDefaultLocation(String id) async {
     await repository.setDefaultLocation(id);
@@ -204,6 +270,57 @@ class AppController extends ChangeNotifier {
     catalog = await repository.loadCatalog();
     notifyListeners();
     return machine;
+  }
+
+  Future<void> saveWorkoutAsRoutine(
+    WorkoutSessionModel workout,
+    String name,
+  ) async {
+    await flushSetWrites();
+    await repository.saveWorkoutAsRoutine(workout: workout, name: name);
+    routines = await repository.loadRoutines();
+    notifyListeners();
+  }
+
+  Future<void> renameRoutine(String id, String name) async {
+    await repository.renameRoutine(id, name);
+    routines = await repository.loadRoutines();
+    notifyListeners();
+  }
+
+  Future<void> deleteRoutine(String id) async {
+    await repository.deleteRoutine(id);
+    routines = await repository.loadRoutines();
+    notifyListeners();
+  }
+
+  Future<void> flushSetWrites([String? setId]) async {
+    if (setId != null) {
+      final pending = _pendingSetWrites[setId];
+      if (pending != null) await pending;
+      return;
+    }
+    await Future.wait(_pendingSetWrites.values.toList());
+  }
+
+  Future<void> _enqueueSetWrite(String setId, Future<void> Function() write) {
+    final previous = _pendingSetWrites[setId] ?? Future<void>.value();
+    late final Future<void> next;
+    next = previous
+        .catchError((Object _) {})
+        .then((_) => write())
+        .catchError((Object exception) {
+          actionError = exception;
+          notifyListeners();
+          throw exception;
+        })
+        .whenComplete(() {
+          if (identical(_pendingSetWrites[setId], next)) {
+            _pendingSetWrites.remove(setId);
+          }
+        });
+    _pendingSetWrites[setId] = next;
+    return next;
   }
 
   Future<void> _refreshWorkout() async {

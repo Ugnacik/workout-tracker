@@ -382,6 +382,47 @@ class DriftWorkoutRepository implements WorkoutRepository {
       );
 
   @override
+  Future<int> loadRestTimerSeconds() async {
+    final row = await (db.select(
+      db.appSettings,
+    )..where((t) => t.key.equals('restTimerSeconds'))).getSingleOrNull();
+    return int.tryParse(row?.value ?? '') ?? 90;
+  }
+
+  @override
+  Future<void> setRestTimerSeconds(int seconds) => db
+      .into(db.appSettings)
+      .insertOnConflictUpdate(
+        AppSettingsCompanion.insert(key: 'restTimerSeconds', value: '$seconds'),
+      );
+
+  @override
+  Future<DateTime?> loadRestTimerDeadline() async {
+    final row = await (db.select(
+      db.appSettings,
+    )..where((t) => t.key.equals('restTimerDeadline'))).getSingleOrNull();
+    return row == null ? null : DateTime.tryParse(row.value);
+  }
+
+  @override
+  Future<void> setRestTimerDeadline(DateTime? deadline) async {
+    if (deadline == null) {
+      await (db.delete(
+        db.appSettings,
+      )..where((t) => t.key.equals('restTimerDeadline'))).go();
+      return;
+    }
+    await db
+        .into(db.appSettings)
+        .insertOnConflictUpdate(
+          AppSettingsCompanion.insert(
+            key: 'restTimerDeadline',
+            value: deadline.toUtc().toIso8601String(),
+          ),
+        );
+  }
+
+  @override
   Future<void> setDefaultLocation(String locationId) =>
       db.transaction(() async {
         await db
@@ -536,6 +577,14 @@ class DriftWorkoutRepository implements WorkoutRepository {
   }
 
   @override
+  Future<List<WorkoutRoutineModel>> loadRoutines() async {
+    final rows = await (db.select(
+      db.workoutRoutines,
+    )..orderBy([(t) => OrderingTerm.desc(t.updatedAt)])).get();
+    return Future.wait(rows.map(_hydrateRoutine));
+  }
+
+  @override
   Future<WorkoutSessionModel> startWorkout(String gymLocationId) async {
     final current = await loadActiveWorkout();
     if (current != null) return current;
@@ -548,6 +597,120 @@ class DriftWorkoutRepository implements WorkoutRepository {
     await db.into(db.workoutSessions).insert(row);
     return (await loadActiveWorkout())!;
   }
+
+  @override
+  Future<WorkoutSessionModel> startWorkoutFromRoutine(
+    String gymLocationId,
+    String routineId,
+  ) async {
+    final current = await loadActiveWorkout();
+    if (current != null) return current;
+    final routine = await _hydrateRoutine(
+      await (db.select(
+        db.workoutRoutines,
+      )..where((t) => t.id.equals(routineId))).getSingle(),
+    );
+    final sessionId = _uuid.v4();
+    await db.transaction(() async {
+      await db
+          .into(db.workoutSessions)
+          .insert(
+            WorkoutSessionsCompanion.insert(
+              id: sessionId,
+              gymLocationId: gymLocationId,
+              startedAt: DateTime.now(),
+            ),
+          );
+      for (final routineExercise in routine.exercises) {
+        final entryId = _uuid.v4();
+        await db
+            .into(db.workoutEntries)
+            .insert(
+              WorkoutEntriesCompanion.insert(
+                id: entryId,
+                sessionId: sessionId,
+                exerciseVariationId: routineExercise.exercise.id,
+                machineModelId: Value(
+                  routineExercise.exercise.machineModel?.id,
+                ),
+                position: routineExercise.position,
+              ),
+            );
+        for (
+          var position = 0;
+          position < routineExercise.setCount;
+          position++
+        ) {
+          await db
+              .into(db.loggedSets)
+              .insert(
+                LoggedSetsCompanion.insert(
+                  id: _uuid.v4(),
+                  workoutEntryId: entryId,
+                  position: position,
+                ),
+              );
+        }
+      }
+    });
+    return (await loadActiveWorkout())!;
+  }
+
+  @override
+  Future<WorkoutRoutineModel> saveWorkoutAsRoutine({
+    required WorkoutSessionModel workout,
+    required String name,
+  }) async {
+    final id = _uuid.v4();
+    final now = DateTime.now();
+    await db.transaction(() async {
+      await db
+          .into(db.workoutRoutines)
+          .insert(
+            WorkoutRoutinesCompanion.insert(
+              id: id,
+              name: name.trim(),
+              createdAt: now,
+              updatedAt: now,
+            ),
+          );
+      for (final entry in workout.exercises) {
+        await db
+            .into(db.routineExercises)
+            .insert(
+              RoutineExercisesCompanion.insert(
+                id: _uuid.v4(),
+                routineId: id,
+                exerciseVariationId: entry.exercise.id,
+                machineModelId: Value(entry.exercise.machineModel?.id),
+                position: entry.position,
+                setCount: Value(entry.sets.isEmpty ? 1 : entry.sets.length),
+              ),
+            );
+      }
+    });
+    return _hydrateRoutine(
+      await (db.select(
+        db.workoutRoutines,
+      )..where((t) => t.id.equals(id))).getSingle(),
+    );
+  }
+
+  @override
+  Future<void> renameRoutine(String routineId, String name) =>
+      (db.update(
+        db.workoutRoutines,
+      )..where((t) => t.id.equals(routineId))).write(
+        WorkoutRoutinesCompanion(
+          name: Value(name.trim()),
+          updatedAt: Value(DateTime.now()),
+        ),
+      );
+
+  @override
+  Future<void> deleteRoutine(String routineId) => (db.delete(
+    db.workoutRoutines,
+  )..where((t) => t.id.equals(routineId))).go();
 
   @override
   Future<void> changeWorkoutLocation(String sessionId, String locationId) =>
@@ -646,6 +809,33 @@ class DriftWorkoutRepository implements WorkoutRepository {
   );
 
   @override
+  Future<void> completeSet({
+    required String setId,
+    required int reps,
+    double? loadKg,
+    double? bodyweightAdjustmentKg,
+    BodyweightAdjustment adjustment = BodyweightAdjustment.none,
+  }) => (db.update(db.loggedSets)..where((t) => t.id.equals(setId))).write(
+    LoggedSetsCompanion(
+      reps: Value(reps),
+      loadKg: Value(loadKg),
+      bodyweightAdjustmentKg: Value(bodyweightAdjustmentKg),
+      adjustment: Value(adjustment.name),
+      isCompleted: const Value(true),
+      completedAt: Value(DateTime.now()),
+    ),
+  );
+
+  @override
+  Future<void> reopenSet(String setId) =>
+      (db.update(db.loggedSets)..where((t) => t.id.equals(setId))).write(
+        const LoggedSetsCompanion(
+          isCompleted: Value(false),
+          completedAt: Value(null),
+        ),
+      );
+
+  @override
   Future<void> duplicateSet(String setId) async {
     final source = await (db.select(
       db.loggedSets,
@@ -701,9 +891,44 @@ class DriftWorkoutRepository implements WorkoutRepository {
   }
 
   @override
-  Future<void> finishWorkout(String sessionId) =>
-      (db.update(db.workoutSessions)..where((t) => t.id.equals(sessionId)))
+  Future<FinishWorkoutResult> finishWorkout(String sessionId) async {
+    final entries = await (db.select(
+      db.workoutEntries,
+    )..where((t) => t.sessionId.equals(sessionId))).get();
+    var omitted = 0;
+    await db.transaction(() async {
+      for (final entry in entries) {
+        final incomplete =
+            await (db.select(db.loggedSets)..where(
+                  (t) =>
+                      t.workoutEntryId.equals(entry.id) &
+                      t.isCompleted.equals(false),
+                ))
+                .get();
+        omitted += incomplete.length;
+        await (db.delete(db.loggedSets)..where(
+              (t) =>
+                  t.workoutEntryId.equals(entry.id) &
+                  t.isCompleted.equals(false),
+            ))
+            .go();
+        await _normalizeSets(entry.id);
+        final remaining = await (db.select(
+          db.loggedSets,
+        )..where((t) => t.workoutEntryId.equals(entry.id))).get();
+        if (remaining.isEmpty) {
+          await (db.delete(
+            db.workoutEntries,
+          )..where((t) => t.id.equals(entry.id))).go();
+        }
+      }
+      await _normalizeExercises(sessionId);
+      await (db.update(db.workoutSessions)
+            ..where((t) => t.id.equals(sessionId)))
           .write(WorkoutSessionsCompanion(finishedAt: Value(DateTime.now())));
+    });
+    return FinishWorkoutResult(omittedSetCount: omitted);
+  }
 
   @override
   Future<void> discardWorkout(String sessionId) async {
@@ -726,33 +951,33 @@ class DriftWorkoutRepository implements WorkoutRepository {
   }
 
   @override
-  Future<String?> previousPerformance(ExerciseChoice exercise) async {
+  Future<List<PreviousSetSnapshot>> previousSets(
+    ExerciseChoice exercise,
+  ) async {
     final history = await loadHistory();
     for (final session in history) {
       for (final entry in session.exercises) {
         if (entry.exercise.id == exercise.id &&
             entry.exercise.machineModel?.id == exercise.machineModel?.id &&
             entry.sets.isNotEmpty) {
-          final set = entry.sets.reduce(
-            (a, b) =>
-                (a.loadKg ?? a.bodyweightAdjustmentKg ?? 0) >=
-                    (b.loadKg ?? b.bodyweightAdjustmentKg ?? 0)
-                ? a
-                : b,
-          );
-          if (entry.exercise.equipmentType == EquipmentType.bodyweight) {
-            final sign = set.adjustment == BodyweightAdjustment.assisted
-                ? 'assisted'
-                : set.adjustment == BodyweightAdjustment.added
-                ? 'added'
-                : 'bodyweight';
-            return '${set.reps} reps${set.bodyweightAdjustmentKg == null ? '' : ' · ${set.bodyweightAdjustmentKg!.toStringAsFixed(1)} kg $sign'}';
-          }
-          return '${set.reps} reps · ${(set.loadKg ?? 0).toStringAsFixed(1)} kg';
+          final performedAt = session.finishedAt ?? session.startedAt;
+          return entry.sets
+              .where((set) => set.isCompleted)
+              .map(
+                (set) => PreviousSetSnapshot(
+                  position: set.position,
+                  reps: set.reps,
+                  performedAt: performedAt,
+                  loadKg: set.loadKg,
+                  bodyweightAdjustmentKg: set.bodyweightAdjustmentKg,
+                  adjustment: set.adjustment,
+                ),
+              )
+              .toList();
         }
       }
     }
-    return null;
+    return const [];
   }
 
   Future<WorkoutSessionModel> _hydrateSession(WorkoutSession row) async {
@@ -803,6 +1028,8 @@ class DriftWorkoutRepository implements WorkoutRepository {
                   adjustment: BodyweightAdjustment.values.byName(
                     set.adjustment,
                   ),
+                  isCompleted: set.isCompleted,
+                  completedAt: set.completedAt,
                 ),
               )
               .toList(),
@@ -816,6 +1043,39 @@ class DriftWorkoutRepository implements WorkoutRepository {
       startedAt: row.startedAt,
       finishedAt: row.finishedAt,
       exercises: entries,
+    );
+  }
+
+  Future<WorkoutRoutineModel> _hydrateRoutine(WorkoutRoutine row) async {
+    final catalog = await loadCatalog();
+    final entries =
+        await (db.select(db.routineExercises)
+              ..where((t) => t.routineId.equals(row.id))
+              ..orderBy([(t) => OrderingTerm.asc(t.position)]))
+            .get();
+    return WorkoutRoutineModel(
+      id: row.id,
+      name: row.name,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+      exercises: entries.map((entry) {
+        var exercise = catalog.exercises.firstWhere(
+          (candidate) => candidate.id == entry.exerciseVariationId,
+        );
+        if (entry.machineModelId != null) {
+          exercise = exercise.withMachine(
+            catalog.machines
+                .where((machine) => machine.id == entry.machineModelId)
+                .firstOrNull,
+          );
+        }
+        return RoutineExerciseModel(
+          id: entry.id,
+          position: entry.position,
+          exercise: exercise,
+          setCount: entry.setCount,
+        );
+      }).toList(),
     );
   }
 
