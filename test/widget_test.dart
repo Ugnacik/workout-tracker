@@ -62,4 +62,45 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
     await database.close();
   });
+
+  testWidgets('user can add a movement pattern from exercise creation', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(430, 900));
+    final database = AppDatabase.forTesting(NativeDatabase.memory());
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [databaseProvider.overrideWithValue(database)],
+        child: const WorkoutTrackerApp(),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Start workout'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Start empty'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Add exercise'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(TextButton, 'Create'));
+    await tester.pumpAndSettle();
+
+    final muscleDropdown = find
+        .byWidgetPredicate(
+          (widget) => widget is DropdownButtonFormField<String>,
+        )
+        .first;
+    await tester.tap(muscleDropdown);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Shoulders').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Add movement pattern'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).last, 'Fly');
+    await tester.tap(find.widgetWithText(FilledButton, 'Add'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Fly'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await database.close();
+  });
 }

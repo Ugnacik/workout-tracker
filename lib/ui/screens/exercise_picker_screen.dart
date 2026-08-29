@@ -400,43 +400,10 @@ class _ExercisePickerScreenState extends ConsumerState<ExercisePickerScreen> {
   }
 
   Future<MachineModelInfo?> _createMachine(AppController controller) async {
-    final maker = TextEditingController();
-    final model = TextEditingController();
     final result = await showDialog<List<String>>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Add machine model'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: maker,
-              textCapitalization: TextCapitalization.words,
-              decoration: const InputDecoration(labelText: 'Manufacturer'),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: model,
-              textCapitalization: TextCapitalization.words,
-              decoration: const InputDecoration(labelText: 'Model'),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () =>
-                Navigator.pop(context, [maker.text.trim(), model.text.trim()]),
-            child: const Text('Add'),
-          ),
-        ],
-      ),
+      builder: (context) => const _MachineModelDialog(),
     );
-    maker.dispose();
-    model.dispose();
     if (result == null || result.any((value) => value.isEmpty)) return null;
     return controller.addMachineModel(
       manufacturerName: result[0],
@@ -494,6 +461,7 @@ class _CreateExerciseDialogState extends State<_CreateExerciseDialog> {
             const SizedBox(height: 12),
             DropdownButtonFormField<String>(
               initialValue: muscle,
+              isExpanded: true,
               decoration: const InputDecoration(labelText: 'Primary muscle'),
               items: catalog.muscles
                   .map(
@@ -511,6 +479,7 @@ class _CreateExerciseDialogState extends State<_CreateExerciseDialog> {
             const SizedBox(height: 12),
             DropdownButtonFormField<String>(
               initialValue: pattern,
+              isExpanded: true,
               decoration: const InputDecoration(labelText: 'Movement pattern'),
               items: patterns
                   .map(
@@ -532,6 +501,7 @@ class _CreateExerciseDialogState extends State<_CreateExerciseDialog> {
             ),
             DropdownButtonFormField<EquipmentType>(
               initialValue: equipment,
+              isExpanded: true,
               decoration: const InputDecoration(labelText: 'Equipment'),
               items: EquipmentType.values
                   .map(
@@ -575,36 +545,119 @@ class _CreateExerciseDialogState extends State<_CreateExerciseDialog> {
   }
 
   Future<void> _addMovementPattern() async {
-    final text = TextEditingController();
     final name = await showDialog<String>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Add movement pattern'),
-        content: TextField(
-          controller: text,
-          autofocus: true,
-          textCapitalization: TextCapitalization.sentences,
-          decoration: const InputDecoration(labelText: 'Pattern name'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, text.text.trim()),
-            child: const Text('Add'),
-          ),
-        ],
+      builder: (dialogContext) => const _TextEntryDialog(
+        title: 'Add movement pattern',
+        label: 'Pattern name',
       ),
     );
-    text.dispose();
     if (name == null || name.isEmpty || muscle == null) return;
     final created = await widget.controller.addMovementPattern(
       name: name,
       muscleGroupId: muscle!,
     );
     if (mounted) setState(() => pattern = created.id);
+  }
+}
+
+class _TextEntryDialog extends StatefulWidget {
+  const _TextEntryDialog({required this.title, required this.label});
+
+  final String title;
+  final String label;
+
+  @override
+  State<_TextEntryDialog> createState() => _TextEntryDialogState();
+}
+
+class _TextEntryDialogState extends State<_TextEntryDialog> {
+  final text = TextEditingController();
+
+  @override
+  void dispose() {
+    text.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: Text(widget.title),
+    content: TextField(
+      controller: text,
+      autofocus: true,
+      textCapitalization: TextCapitalization.sentences,
+      decoration: InputDecoration(labelText: widget.label),
+      onSubmitted: (_) => _submit(),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('Cancel'),
+      ),
+      FilledButton(onPressed: _submit, child: const Text('Add')),
+    ],
+  );
+
+  void _submit() {
+    final value = text.text.trim();
+    if (value.isNotEmpty) Navigator.pop(context, value);
+  }
+}
+
+class _MachineModelDialog extends StatefulWidget {
+  const _MachineModelDialog();
+
+  @override
+  State<_MachineModelDialog> createState() => _MachineModelDialogState();
+}
+
+class _MachineModelDialogState extends State<_MachineModelDialog> {
+  final maker = TextEditingController();
+  final model = TextEditingController();
+
+  @override
+  void dispose() {
+    maker.dispose();
+    model.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('Add machine model'),
+    content: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        TextField(
+          controller: maker,
+          textCapitalization: TextCapitalization.words,
+          decoration: const InputDecoration(labelText: 'Manufacturer'),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: model,
+          textCapitalization: TextCapitalization.words,
+          decoration: const InputDecoration(labelText: 'Model'),
+          onSubmitted: (_) => _submit(),
+        ),
+      ],
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('Cancel'),
+      ),
+      FilledButton(onPressed: _submit, child: const Text('Add')),
+    ],
+  );
+
+  void _submit() {
+    final manufacturer = maker.text.trim();
+    final modelName = model.text.trim();
+    if (manufacturer.isNotEmpty && modelName.isNotEmpty) {
+      Navigator.pop(context, [manufacturer, modelName]);
+    }
   }
 }
 
