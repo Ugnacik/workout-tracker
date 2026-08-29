@@ -29,10 +29,9 @@ final restTimerProvider = ChangeNotifierProvider<RestTimerService>((ref) {
 });
 
 final appControllerProvider = ChangeNotifierProvider<AppController>(
-  (ref) => AppController(
-    ref.watch(repositoryProvider),
-    ref.read(restTimerProvider),
-  )..initialize(),
+  (ref) =>
+      AppController(ref.watch(repositoryProvider), ref.read(restTimerProvider))
+        ..initialize(),
 );
 
 class AppController extends ChangeNotifier {
@@ -108,8 +107,13 @@ class AppController extends ChangeNotifier {
     await _refreshWorkout();
   }
 
-  Future<List<PreviousSetSnapshot>> previousSets(ExerciseChoice exercise) =>
-      repository.previousSets(exercise);
+  Future<List<PreviousSetSnapshot>> previousSets(
+    ExerciseChoice exercise,
+  ) async {
+    final gymLocationId = activeWorkout?.gymLocationId;
+    if (gymLocationId == null) return const [];
+    return repository.previousSets(exercise, gymLocationId: gymLocationId);
+  }
 
   Future<void> addExercise(ExerciseChoice exercise) async {
     final workout = activeWorkout;

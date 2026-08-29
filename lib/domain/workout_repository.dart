@@ -66,6 +66,9 @@ abstract interface class WorkoutRepository {
   Future<void> moveSet(String setId, int direction);
   Future<FinishWorkoutResult> finishWorkout(String sessionId);
   Future<void> discardWorkout(String sessionId);
-  Future<List<PreviousSetSnapshot>> previousSets(ExerciseChoice exercise);
+  Future<List<PreviousSetSnapshot>> previousSets(
+    ExerciseChoice exercise, {
+    required String gymLocationId,
+  });
   Future<void> close();
 }

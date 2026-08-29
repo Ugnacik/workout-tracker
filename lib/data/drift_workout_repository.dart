@@ -952,10 +952,12 @@ class DriftWorkoutRepository implements WorkoutRepository {
 
   @override
   Future<List<PreviousSetSnapshot>> previousSets(
-    ExerciseChoice exercise,
-  ) async {
+    ExerciseChoice exercise, {
+    required String gymLocationId,
+  }) async {
     final history = await loadHistory();
     for (final session in history) {
+      if (session.gymLocationId != gymLocationId) continue;
       for (final entry in session.exercises) {
         if (entry.exercise.id == exercise.id &&
             entry.exercise.machineModel?.id == exercise.machineModel?.id &&

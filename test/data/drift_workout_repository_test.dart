@@ -88,27 +88,48 @@ void main() {
         8,
       );
       expect(
-        (await repository.previousSets(exercise)).single.adjustment,
+        (await repository.previousSets(
+          exercise,
+          gymLocationId: location.id,
+        )).single.adjustment,
         BodyweightAdjustment.assisted,
       );
     },
   );
 
-  test('machine history is keyed by model across gym locations', () async {
+  test('previous performance is scoped to gym location', () async {
     final catalog = await repository.loadCatalog();
-    final pulldown = catalog.exercises
-        .singleWhere((item) => item.name == 'Lat pulldown')
-        .withMachine(catalog.machines.first);
+    final curl = catalog.exercises.singleWhere(
+      (item) => item.name == 'Dumbbell curl',
+    );
     final firstGym = (await repository.loadLocations()).single;
     final secondGym = await repository.addLocation('Second Gym');
-    final session = await repository.startWorkout(firstGym.id);
-    await repository.addExercise(session.id, pulldown);
-    final set =
+    final firstSession = await repository.startWorkout(firstGym.id);
+    await repository.addExercise(firstSession.id, curl);
+    final firstSet =
         (await repository.loadActiveWorkout())!.exercises.single.sets.single;
-    await repository.completeSet(setId: set.id, reps: 10, loadKg: 55);
-    await repository.changeWorkoutLocation(session.id, secondGym.id);
-    await repository.finishWorkout(session.id);
-    expect((await repository.previousSets(pulldown)).single.loadKg, 55);
+    await repository.completeSet(setId: firstSet.id, reps: 10, loadKg: 50);
+    await repository.finishWorkout(firstSession.id);
+
+    final secondSession = await repository.startWorkout(secondGym.id);
+    await repository.addExercise(secondSession.id, curl);
+    final secondSet =
+        (await repository.loadActiveWorkout())!.exercises.single.sets.single;
+    await repository.completeSet(setId: secondSet.id, reps: 12, loadKg: 25);
+    await repository.finishWorkout(secondSession.id);
+
+    final firstGymPrevious = await repository.previousSets(
+      curl,
+      gymLocationId: firstGym.id,
+    );
+    final secondGymPrevious = await repository.previousSets(
+      curl,
+      gymLocationId: secondGym.id,
+    );
+    expect(firstGymPrevious.single.loadKg, 50);
+    expect(firstGymPrevious.single.reps, 10);
+    expect(secondGymPrevious.single.loadKg, 25);
+    expect(secondGymPrevious.single.reps, 12);
   });
 
   test('finish omits unchecked sets and empty exercises', () async {
