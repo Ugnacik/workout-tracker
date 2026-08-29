@@ -21,8 +21,8 @@ void main() {
         .customSelect('PRAGMA user_version')
         .getSingle();
     final catalog = await repository.loadCatalog();
-    expect(database.schemaVersion, 2);
-    expect(version.read<int>('user_version'), 2);
+    expect(database.schemaVersion, 3);
+    expect(version.read<int>('user_version'), 3);
     expect(
       catalog.exercises.any((item) => item.name == 'Neutral-grip pull-up'),
       isTrue,
@@ -75,8 +75,9 @@ void main() {
         bodyweightAdjustmentKg: 12,
         adjustment: BodyweightAdjustment.assisted,
       );
-      await repository.finishWorkout(session.id);
+      await repository.finishWorkout(session.id, name: 'Pull strength');
       expect(await repository.loadActiveWorkout(), isNull);
+      expect((await repository.loadHistory()).single.name, 'Pull strength');
       expect(
         (await repository.loadHistory())
             .single

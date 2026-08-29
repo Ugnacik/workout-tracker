@@ -194,11 +194,11 @@ class AppController extends ChangeNotifier {
     await _refreshWorkout();
   }
 
-  Future<FinishWorkoutResult?> finishWorkout() async {
+  Future<FinishWorkoutResult?> finishWorkout({String? name}) async {
     final workout = activeWorkout;
     if (workout == null) return null;
     await flushSetWrites();
-    final result = await repository.finishWorkout(workout.id);
+    final result = await repository.finishWorkout(workout.id, name: name);
     await refresh();
     return result;
   }

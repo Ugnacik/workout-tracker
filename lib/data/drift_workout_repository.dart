@@ -891,7 +891,11 @@ class DriftWorkoutRepository implements WorkoutRepository {
   }
 
   @override
-  Future<FinishWorkoutResult> finishWorkout(String sessionId) async {
+  Future<FinishWorkoutResult> finishWorkout(
+    String sessionId, {
+    String? name,
+  }) async {
+    final normalizedName = name?.trim();
     final entries = await (db.select(
       db.workoutEntries,
     )..where((t) => t.sessionId.equals(sessionId))).get();
@@ -923,9 +927,18 @@ class DriftWorkoutRepository implements WorkoutRepository {
         }
       }
       await _normalizeExercises(sessionId);
-      await (db.update(db.workoutSessions)
-            ..where((t) => t.id.equals(sessionId)))
-          .write(WorkoutSessionsCompanion(finishedAt: Value(DateTime.now())));
+      await (db.update(
+        db.workoutSessions,
+      )..where((t) => t.id.equals(sessionId))).write(
+        WorkoutSessionsCompanion(
+          name: Value(
+            normalizedName == null || normalizedName.isEmpty
+                ? null
+                : normalizedName,
+          ),
+          finishedAt: Value(DateTime.now()),
+        ),
+      );
     });
     return FinishWorkoutResult(omittedSetCount: omitted);
   }
@@ -1040,6 +1053,7 @@ class DriftWorkoutRepository implements WorkoutRepository {
     }
     return WorkoutSessionModel(
       id: row.id,
+      name: row.name,
       gymLocationId: row.gymLocationId,
       gymLocationName: location.name,
       startedAt: row.startedAt,

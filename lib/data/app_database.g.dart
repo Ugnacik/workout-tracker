@@ -2089,6 +2089,15 @@ class $WorkoutSessionsTable extends WorkoutSessions
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _gymLocationIdMeta = const VerificationMeta(
     'gymLocationId',
   );
@@ -2125,6 +2134,7 @@ class $WorkoutSessionsTable extends WorkoutSessions
   @override
   List<GeneratedColumn> get $columns => [
     id,
+    name,
     gymLocationId,
     startedAt,
     finishedAt,
@@ -2145,6 +2155,12 @@ class $WorkoutSessionsTable extends WorkoutSessions
       context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
     } else if (isInserting) {
       context.missing(_idMeta);
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
     }
     if (data.containsKey('gym_location_id')) {
       context.handle(
@@ -2184,6 +2200,10 @@ class $WorkoutSessionsTable extends WorkoutSessions
         DriftSqlType.string,
         data['${effectivePrefix}id'],
       )!,
+      name: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}name'],
+      ),
       gymLocationId: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}gym_location_id'],
@@ -2207,11 +2227,13 @@ class $WorkoutSessionsTable extends WorkoutSessions
 
 class WorkoutSession extends DataClass implements Insertable<WorkoutSession> {
   final String id;
+  final String? name;
   final String gymLocationId;
   final DateTime startedAt;
   final DateTime? finishedAt;
   const WorkoutSession({
     required this.id,
+    this.name,
     required this.gymLocationId,
     required this.startedAt,
     this.finishedAt,
@@ -2220,6 +2242,9 @@ class WorkoutSession extends DataClass implements Insertable<WorkoutSession> {
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     map['id'] = Variable<String>(id);
+    if (!nullToAbsent || name != null) {
+      map['name'] = Variable<String>(name);
+    }
     map['gym_location_id'] = Variable<String>(gymLocationId);
     map['started_at'] = Variable<DateTime>(startedAt);
     if (!nullToAbsent || finishedAt != null) {
@@ -2231,6 +2256,7 @@ class WorkoutSession extends DataClass implements Insertable<WorkoutSession> {
   WorkoutSessionsCompanion toCompanion(bool nullToAbsent) {
     return WorkoutSessionsCompanion(
       id: Value(id),
+      name: name == null && nullToAbsent ? const Value.absent() : Value(name),
       gymLocationId: Value(gymLocationId),
       startedAt: Value(startedAt),
       finishedAt: finishedAt == null && nullToAbsent
@@ -2246,6 +2272,7 @@ class WorkoutSession extends DataClass implements Insertable<WorkoutSession> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return WorkoutSession(
       id: serializer.fromJson<String>(json['id']),
+      name: serializer.fromJson<String?>(json['name']),
       gymLocationId: serializer.fromJson<String>(json['gymLocationId']),
       startedAt: serializer.fromJson<DateTime>(json['startedAt']),
       finishedAt: serializer.fromJson<DateTime?>(json['finishedAt']),
@@ -2256,6 +2283,7 @@ class WorkoutSession extends DataClass implements Insertable<WorkoutSession> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
       'id': serializer.toJson<String>(id),
+      'name': serializer.toJson<String?>(name),
       'gymLocationId': serializer.toJson<String>(gymLocationId),
       'startedAt': serializer.toJson<DateTime>(startedAt),
       'finishedAt': serializer.toJson<DateTime?>(finishedAt),
@@ -2264,11 +2292,13 @@ class WorkoutSession extends DataClass implements Insertable<WorkoutSession> {
 
   WorkoutSession copyWith({
     String? id,
+    Value<String?> name = const Value.absent(),
     String? gymLocationId,
     DateTime? startedAt,
     Value<DateTime?> finishedAt = const Value.absent(),
   }) => WorkoutSession(
     id: id ?? this.id,
+    name: name.present ? name.value : this.name,
     gymLocationId: gymLocationId ?? this.gymLocationId,
     startedAt: startedAt ?? this.startedAt,
     finishedAt: finishedAt.present ? finishedAt.value : this.finishedAt,
@@ -2276,6 +2306,7 @@ class WorkoutSession extends DataClass implements Insertable<WorkoutSession> {
   WorkoutSession copyWithCompanion(WorkoutSessionsCompanion data) {
     return WorkoutSession(
       id: data.id.present ? data.id.value : this.id,
+      name: data.name.present ? data.name.value : this.name,
       gymLocationId: data.gymLocationId.present
           ? data.gymLocationId.value
           : this.gymLocationId,
@@ -2290,6 +2321,7 @@ class WorkoutSession extends DataClass implements Insertable<WorkoutSession> {
   String toString() {
     return (StringBuffer('WorkoutSession(')
           ..write('id: $id, ')
+          ..write('name: $name, ')
           ..write('gymLocationId: $gymLocationId, ')
           ..write('startedAt: $startedAt, ')
           ..write('finishedAt: $finishedAt')
@@ -2298,12 +2330,14 @@ class WorkoutSession extends DataClass implements Insertable<WorkoutSession> {
   }
 
   @override
-  int get hashCode => Object.hash(id, gymLocationId, startedAt, finishedAt);
+  int get hashCode =>
+      Object.hash(id, name, gymLocationId, startedAt, finishedAt);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       (other is WorkoutSession &&
           other.id == this.id &&
+          other.name == this.name &&
           other.gymLocationId == this.gymLocationId &&
           other.startedAt == this.startedAt &&
           other.finishedAt == this.finishedAt);
@@ -2311,12 +2345,14 @@ class WorkoutSession extends DataClass implements Insertable<WorkoutSession> {
 
 class WorkoutSessionsCompanion extends UpdateCompanion<WorkoutSession> {
   final Value<String> id;
+  final Value<String?> name;
   final Value<String> gymLocationId;
   final Value<DateTime> startedAt;
   final Value<DateTime?> finishedAt;
   final Value<int> rowid;
   const WorkoutSessionsCompanion({
     this.id = const Value.absent(),
+    this.name = const Value.absent(),
     this.gymLocationId = const Value.absent(),
     this.startedAt = const Value.absent(),
     this.finishedAt = const Value.absent(),
@@ -2324,6 +2360,7 @@ class WorkoutSessionsCompanion extends UpdateCompanion<WorkoutSession> {
   });
   WorkoutSessionsCompanion.insert({
     required String id,
+    this.name = const Value.absent(),
     required String gymLocationId,
     required DateTime startedAt,
     this.finishedAt = const Value.absent(),
@@ -2333,6 +2370,7 @@ class WorkoutSessionsCompanion extends UpdateCompanion<WorkoutSession> {
        startedAt = Value(startedAt);
   static Insertable<WorkoutSession> custom({
     Expression<String>? id,
+    Expression<String>? name,
     Expression<String>? gymLocationId,
     Expression<DateTime>? startedAt,
     Expression<DateTime>? finishedAt,
@@ -2340,6 +2378,7 @@ class WorkoutSessionsCompanion extends UpdateCompanion<WorkoutSession> {
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
+      if (name != null) 'name': name,
       if (gymLocationId != null) 'gym_location_id': gymLocationId,
       if (startedAt != null) 'started_at': startedAt,
       if (finishedAt != null) 'finished_at': finishedAt,
@@ -2349,6 +2388,7 @@ class WorkoutSessionsCompanion extends UpdateCompanion<WorkoutSession> {
 
   WorkoutSessionsCompanion copyWith({
     Value<String>? id,
+    Value<String?>? name,
     Value<String>? gymLocationId,
     Value<DateTime>? startedAt,
     Value<DateTime?>? finishedAt,
@@ -2356,6 +2396,7 @@ class WorkoutSessionsCompanion extends UpdateCompanion<WorkoutSession> {
   }) {
     return WorkoutSessionsCompanion(
       id: id ?? this.id,
+      name: name ?? this.name,
       gymLocationId: gymLocationId ?? this.gymLocationId,
       startedAt: startedAt ?? this.startedAt,
       finishedAt: finishedAt ?? this.finishedAt,
@@ -2368,6 +2409,9 @@ class WorkoutSessionsCompanion extends UpdateCompanion<WorkoutSession> {
     final map = <String, Expression>{};
     if (id.present) {
       map['id'] = Variable<String>(id.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
     }
     if (gymLocationId.present) {
       map['gym_location_id'] = Variable<String>(gymLocationId.value);
@@ -2388,6 +2432,7 @@ class WorkoutSessionsCompanion extends UpdateCompanion<WorkoutSession> {
   String toString() {
     return (StringBuffer('WorkoutSessionsCompanion(')
           ..write('id: $id, ')
+          ..write('name: $name, ')
           ..write('gymLocationId: $gymLocationId, ')
           ..write('startedAt: $startedAt, ')
           ..write('finishedAt: $finishedAt, ')
@@ -5565,6 +5610,7 @@ typedef $$GymLocationsTableProcessedTableManager =
 typedef $$WorkoutSessionsTableCreateCompanionBuilder =
     WorkoutSessionsCompanion Function({
       required String id,
+      Value<String?> name,
       required String gymLocationId,
       required DateTime startedAt,
       Value<DateTime?> finishedAt,
@@ -5573,6 +5619,7 @@ typedef $$WorkoutSessionsTableCreateCompanionBuilder =
 typedef $$WorkoutSessionsTableUpdateCompanionBuilder =
     WorkoutSessionsCompanion Function({
       Value<String> id,
+      Value<String?> name,
       Value<String> gymLocationId,
       Value<DateTime> startedAt,
       Value<DateTime?> finishedAt,
@@ -5590,6 +5637,11 @@ class $$WorkoutSessionsTableFilterComposer
   });
   ColumnFilters<String> get id => $composableBuilder(
     column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -5623,6 +5675,11 @@ class $$WorkoutSessionsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get gymLocationId => $composableBuilder(
     column: $table.gymLocationId,
     builder: (column) => ColumnOrderings(column),
@@ -5650,6 +5707,9 @@ class $$WorkoutSessionsTableAnnotationComposer
   });
   GeneratedColumn<String> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
 
   GeneratedColumn<String> get gymLocationId => $composableBuilder(
     column: $table.gymLocationId,
@@ -5703,12 +5763,14 @@ class $$WorkoutSessionsTableTableManager
           updateCompanionCallback:
               ({
                 Value<String> id = const Value.absent(),
+                Value<String?> name = const Value.absent(),
                 Value<String> gymLocationId = const Value.absent(),
                 Value<DateTime> startedAt = const Value.absent(),
                 Value<DateTime?> finishedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => WorkoutSessionsCompanion(
                 id: id,
+                name: name,
                 gymLocationId: gymLocationId,
                 startedAt: startedAt,
                 finishedAt: finishedAt,
@@ -5717,12 +5779,14 @@ class $$WorkoutSessionsTableTableManager
           createCompanionCallback:
               ({
                 required String id,
+                Value<String?> name = const Value.absent(),
                 required String gymLocationId,
                 required DateTime startedAt,
                 Value<DateTime?> finishedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => WorkoutSessionsCompanion.insert(
                 id: id,
+                name: name,
                 gymLocationId: gymLocationId,
                 startedAt: startedAt,
                 finishedAt: finishedAt,

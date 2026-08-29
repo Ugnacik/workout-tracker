@@ -124,29 +124,16 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       );
       return;
     }
-    final finish = await showDialog<bool>(
+    final name = await showDialog<String>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Finish workout?'),
-        content: Text(
-          incompleteSets == 0
-              ? '$completedSets completed sets will be saved to your history.'
-              : '$completedSets completed sets will be saved. $incompleteSets unchecked sets will be omitted.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Keep logging'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Finish'),
-          ),
-        ],
+      builder: (context) => _FinishWorkoutDialog(
+        summary: incompleteSets == 0
+            ? '$completedSets completed sets will be saved to your history.'
+            : '$completedSets completed sets will be saved. $incompleteSets unchecked sets will be omitted.',
       ),
     );
-    if (finish == true) {
-      await controller.finishWorkout();
+    if (name != null) {
+      await controller.finishWorkout(name: name);
       if (mounted) setState(() => _tab = 1);
     }
   }
@@ -171,6 +158,58 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       ),
     );
   }
+}
+
+class _FinishWorkoutDialog extends StatefulWidget {
+  const _FinishWorkoutDialog({required this.summary});
+
+  final String summary;
+
+  @override
+  State<_FinishWorkoutDialog> createState() => _FinishWorkoutDialogState();
+}
+
+class _FinishWorkoutDialogState extends State<_FinishWorkoutDialog> {
+  final name = TextEditingController();
+
+  @override
+  void dispose() {
+    name.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('Finish workout?'),
+    content: Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(widget.summary),
+        const SizedBox(height: 18),
+        TextField(
+          key: const ValueKey('workoutNameField'),
+          controller: name,
+          autofocus: true,
+          textCapitalization: TextCapitalization.words,
+          decoration: const InputDecoration(
+            labelText: 'Workout name',
+            hintText: 'Optional',
+          ),
+          onSubmitted: (_) => _finish(),
+        ),
+      ],
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('Keep logging'),
+      ),
+      FilledButton(onPressed: _finish, child: const Text('Finish')),
+    ],
+  );
+
+  void _finish() => Navigator.pop(context, name.text.trim());
 }
 
 class WorkoutTab extends StatelessWidget {
@@ -913,12 +952,16 @@ class HistoryTab extends StatelessWidget {
               child: const Icon(Icons.check),
             ),
             title: Text(
-              _dateLabel(session.finishedAt ?? session.startedAt),
+              session.name ??
+                  _dateLabel(session.finishedAt ?? session.startedAt),
               style: const TextStyle(fontWeight: FontWeight.w800),
             ),
             subtitle: Text(
-              '${session.gymLocationName} · ${session.exercises.length} exercises · $setCount sets',
+              session.name == null
+                  ? '${session.gymLocationName} · ${session.exercises.length} exercises · $setCount sets'
+                  : '${_dateLabel(session.finishedAt ?? session.startedAt)} · ${session.gymLocationName}\n${session.exercises.length} exercises · $setCount sets',
             ),
+            isThreeLine: session.name != null,
             trailing: const Icon(Icons.chevron_right),
             onTap: () => showModalBottomSheet<void>(
               context: context,
@@ -956,10 +999,15 @@ class _HistoryDetail extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(20, 4, 20, 28),
         children: [
           Text(
-            _dateLabel(session.finishedAt ?? session.startedAt),
+            session.name ?? _dateLabel(session.finishedAt ?? session.startedAt),
             style: Theme.of(context).textTheme.headlineSmall
                 ?.copyWith(fontWeight: FontWeight.w800),
           ),
+          if (session.name != null)
+            Text(
+              _dateLabel(session.finishedAt ?? session.startedAt),
+              style: const TextStyle(color: Colors.black54),
+            ),
           Text(
             session.gymLocationName,
             style: const TextStyle(color: Colors.black54),

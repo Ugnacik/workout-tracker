@@ -42,9 +42,14 @@ void main() {
     expect(find.textContaining('Rest 1:'), findsOneWidget);
     await tester.tap(find.text('Finish'));
     await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('workoutNameField')),
+      'Pull strength',
+    );
     await tester.tap(find.widgetWithText(FilledButton, 'Finish'));
     await tester.pumpAndSettle();
 
+    expect(find.text('Pull strength'), findsOneWidget);
     expect(find.textContaining('1 exercises'), findsOneWidget);
     await tester.tap(find.textContaining('1 exercises'));
     await tester.pumpAndSettle();

@@ -105,13 +105,57 @@ void main() {
     final version = await database
         .customSelect('PRAGMA user_version')
         .getSingle();
-    expect(version.read<int>('user_version'), 2);
+    final migratedSession = await database
+        .customSelect(
+          'SELECT name FROM workout_sessions WHERE id = ?',
+          variables: [const Variable<String>('session')],
+        )
+        .getSingle();
+    expect(version.read<int>('user_version'), 3);
     expect(migrated.read<int>('is_completed'), 1);
     expect(migrated.read<int?>('completed_at'), isNotNull);
+    expect(migratedSession.read<String?>('name'), isNull);
     expect(
       await database.customSelect('SELECT * FROM workout_routines').get(),
       isEmpty,
     );
+    await database.close();
+    await directory.delete(recursive: true);
+  });
+
+  test('v2 migration adds optional workout names', () async {
+    final directory = await Directory.systemTemp.createTemp(
+      'workout_tracker_v2_migration_',
+    );
+    final file = File('${directory.path}/v2.sqlite');
+    final sqlite = sqlite3.open(file.path);
+    sqlite.execute('''
+      CREATE TABLE workout_sessions (
+        id TEXT NOT NULL PRIMARY KEY,
+        gym_location_id TEXT NOT NULL,
+        started_at INTEGER NOT NULL,
+        finished_at INTEGER
+      );
+    ''');
+    final finishedAt = DateTime(2026, 8, 1, 12).millisecondsSinceEpoch ~/ 1000;
+    sqlite.execute(
+      "INSERT INTO workout_sessions VALUES ('session', 'gym', $finishedAt, $finishedAt)",
+    );
+    sqlite.execute('PRAGMA user_version = 2');
+    sqlite.close();
+
+    final database = AppDatabase.forTesting(NativeDatabase(file));
+    final migrated = await database
+        .customSelect(
+          'SELECT name FROM workout_sessions WHERE id = ?',
+          variables: [const Variable<String>('session')],
+        )
+        .getSingle();
+    final version = await database
+        .customSelect('PRAGMA user_version')
+        .getSingle();
+    expect(version.read<int>('user_version'), 3);
+    expect(migrated.read<String?>('name'), isNull);
     await database.close();
     await directory.delete(recursive: true);
   });

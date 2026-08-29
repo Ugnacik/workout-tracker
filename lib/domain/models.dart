@@ -151,9 +151,11 @@ class WorkoutSessionModel {
     required this.gymLocationName,
     required this.startedAt,
     required this.exercises,
+    this.name,
     this.finishedAt,
   });
   final String id;
+  final String? name;
   final String gymLocationId;
   final String gymLocationName;
   final DateTime startedAt;

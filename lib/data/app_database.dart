@@ -67,6 +67,7 @@ class GymLocations extends Table {
 
 class WorkoutSessions extends Table {
   TextColumn get id => text()();
+  TextColumn get name => text().nullable()();
   TextColumn get gymLocationId => text()();
   DateTimeColumn get startedAt => dateTime()();
   DateTimeColumn get finishedAt => dateTime().nullable()();
@@ -147,7 +148,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -176,6 +177,9 @@ class AppDatabase extends _$AppDatabase {
             WHERE workout_sessions.finished_at IS NOT NULL
           )
         ''');
+      }
+      if (from < 3) {
+        await migrator.addColumn(workoutSessions, workoutSessions.name);
       }
     },
     beforeOpen: (details) async {
