@@ -788,17 +788,24 @@ class _SetEditorRowState extends State<SetEditorRow> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 42,
-            child: Column(
+            width: 60,
+            height: 56,
+            child: Row(
               children: [
-                Text(
-                  '${widget.set.position + 1}',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
+                SizedBox(
+                  width: 12,
+                  child: Text(
+                    '${widget.set.position + 1}',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
                 IconButton(
+                  padding: EdgeInsets.zero,
                   tooltip: widget.set.isCompleted
                       ? 'Reopen set'
                       : 'Complete set',
