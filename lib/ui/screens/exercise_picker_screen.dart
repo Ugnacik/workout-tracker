@@ -190,10 +190,10 @@ class _ExercisePickerScreenState extends ConsumerState<ExercisePickerScreen> {
               children: [
                 Text(
                   '${results.length} EXERCISES',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w800,
-                    color: Colors.black54,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                     letterSpacing: 1,
                   ),
                 ),
@@ -280,7 +280,9 @@ class _ExercisePickerScreenState extends ConsumerState<ExercisePickerScreen> {
               const SizedBox(height: 4),
               Text(
                 '${selected.muscleGroupName} · ${selected.movementPatternName}',
-                style: const TextStyle(color: Colors.black54),
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
               ),
               if (selected.machineModel != null)
                 Padding(

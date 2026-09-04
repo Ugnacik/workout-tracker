@@ -249,8 +249,10 @@ class WorkoutTab extends StatelessWidget {
               Text(
                 'Start at ${controller.defaultLocation?.name ?? 'your gym'}, then choose movements by muscle and function.',
                 textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodyLarge
-                    ?.copyWith(color: Colors.black54, height: 1.4),
+                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  height: 1.4,
+                ),
               ),
               const SizedBox(height: 28),
               SizedBox(
@@ -298,7 +300,9 @@ class WorkoutTab extends StatelessWidget {
                 ),
                 Text(
                   _timeOnly(workout.startedAt),
-                  style: const TextStyle(color: Colors.black54),
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
                 ),
               ],
             ),
@@ -482,22 +486,28 @@ class _EmptyWorkout extends StatelessWidget {
     padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 24),
     margin: const EdgeInsets.only(bottom: 14),
     decoration: BoxDecoration(
-      color: Colors.white,
+      color: Theme.of(context).colorScheme.surfaceContainer,
       borderRadius: BorderRadius.circular(20),
-      border: Border.all(color: const Color(0xFFE4E9E2)),
+      border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
     ),
-    child: const Column(
+    child: Column(
       children: [
-        Icon(Icons.format_list_bulleted_add, size: 38, color: Colors.black38),
-        SizedBox(height: 12),
-        Text(
+        Icon(
+          Icons.format_list_bulleted_add,
+          size: 38,
+          color: Theme.of(context).colorScheme.primary,
+        ),
+        const SizedBox(height: 12),
+        const Text(
           'No exercises yet',
           style: TextStyle(fontWeight: FontWeight.w700, fontSize: 17),
         ),
-        SizedBox(height: 4),
+        const SizedBox(height: 4),
         Text(
           'Browse by muscle and movement pattern.',
-          style: TextStyle(color: Colors.black54),
+          style: TextStyle(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
         ),
       ],
     ),
@@ -542,7 +552,9 @@ class ExerciseLogCard extends StatelessWidget {
                       const SizedBox(height: 3),
                       Text(
                         '${choice.muscleGroupName} · ${choice.movementPatternName}',
-                        style: const TextStyle(color: Colors.black54),
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
                       ),
                       if (choice.machineModel != null)
                         Text(
@@ -784,7 +796,6 @@ class _SetEditorRowState extends State<SetEditorRow> {
                   style: const TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
-                    color: Colors.black54,
                   ),
                 ),
                 IconButton(
@@ -921,12 +932,14 @@ class HistoryTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (controller.history.isEmpty) {
-      return const Center(
+      return Center(
         child: Padding(
-          padding: EdgeInsets.all(24),
+          padding: const EdgeInsets.all(24),
           child: Text(
             'Finished workouts will appear here.',
-            style: TextStyle(color: Colors.black54),
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
           ),
         ),
       );
@@ -1006,11 +1019,15 @@ class _HistoryDetail extends StatelessWidget {
           if (session.name != null)
             Text(
               _dateLabel(session.finishedAt ?? session.startedAt),
-              style: const TextStyle(color: Colors.black54),
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
           Text(
             session.gymLocationName,
-            style: const TextStyle(color: Colors.black54),
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
           ),
           const SizedBox(height: 12),
           OutlinedButton.icon(
@@ -1035,7 +1052,9 @@ class _HistoryDetail extends StatelessWidget {
                   Text(
                     entry.exercise.machineModel?.displayName ??
                         entry.exercise.equipmentType.label,
-                    style: const TextStyle(color: Colors.black54),
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
                   ),
                   const SizedBox(height: 6),
                   ...entry.sets.map(
@@ -1126,11 +1145,13 @@ class SettingsTab extends StatelessWidget {
         ),
       ),
       if (controller.restTimer.permissionDenied)
-        const Padding(
-          padding: EdgeInsets.fromLTRB(4, 8, 4, 0),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(4, 8, 4, 0),
           child: Text(
             'Notification permission is off. The timer will still work while the app is open.',
-            style: TextStyle(color: Colors.black54),
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
           ),
         ),
       const SizedBox(height: 22),
