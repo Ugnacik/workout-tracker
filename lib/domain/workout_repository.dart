@@ -6,6 +6,8 @@ abstract interface class WorkoutRepository {
   Future<List<GymLocationModel>> loadLocations();
   Future<WeightUnit> loadWeightUnit();
   Future<void> setWeightUnit(WeightUnit unit);
+  Future<AppThemePreference> loadThemePreference();
+  Future<void> setThemePreference(AppThemePreference preference);
   Future<int> loadRestTimerSeconds();
   Future<void> setRestTimerSeconds(int seconds);
   Future<DateTime?> loadRestTimerDeadline();
@@ -18,6 +20,8 @@ abstract interface class WorkoutRepository {
     required String muscleGroupId,
     required String movementPatternId,
     required EquipmentType equipmentType,
+    ExerciseExecution? execution,
+    bool independentLimbs = false,
   });
   Future<MovementPatternModel> addMovementPattern({
     required String name,
@@ -26,6 +30,8 @@ abstract interface class WorkoutRepository {
   Future<MachineModelInfo> addMachineModel({
     required String manufacturerName,
     required String modelName,
+    String? exerciseId,
+    bool independentLimbs = false,
   });
   Future<WorkoutSessionModel?> loadActiveWorkout();
   Future<List<WorkoutSessionModel>> loadHistory();
@@ -43,6 +49,11 @@ abstract interface class WorkoutRepository {
   Future<void> deleteRoutine(String routineId);
   Future<void> changeWorkoutLocation(String sessionId, String locationId);
   Future<void> addExercise(String sessionId, ExerciseChoice exercise);
+  Future<void> setExerciseMachine(
+    String entryId, {
+    String? manufacturerId,
+    String? machineModelId,
+  });
   Future<void> removeExercise(String exerciseEntryId);
   Future<void> moveExercise(String exerciseEntryId, int direction);
   Future<void> addSet(String exerciseEntryId);

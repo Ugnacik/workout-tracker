@@ -1,162 +1,140 @@
 import 'dart:io';
 
-import 'package:drift/drift.dart' show Variable;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqlite3/sqlite3.dart';
 import 'package:workout_tracker/data/app_database.dart';
+import 'package:workout_tracker/data/drift_workout_repository.dart';
 
 void main() {
-  test('v1 migration preserves history and marks its sets completed', () async {
-    final directory = await Directory.systemTemp.createTemp(
-      'workout_tracker_migration_',
-    );
-    final file = File('${directory.path}/v1.sqlite');
-    final sqlite = sqlite3.open(file.path);
-    sqlite.execute('''
-      CREATE TABLE muscle_groups (
-        id TEXT NOT NULL PRIMARY KEY,
-        name TEXT NOT NULL,
-        origin TEXT NOT NULL,
-        archived INTEGER NOT NULL DEFAULT 0
-      );
-      CREATE TABLE movement_patterns (
-        id TEXT NOT NULL PRIMARY KEY,
-        muscle_group_id TEXT NOT NULL,
-        name TEXT NOT NULL,
-        origin TEXT NOT NULL,
-        archived INTEGER NOT NULL DEFAULT 0
-      );
-      CREATE TABLE exercise_variations (
-        id TEXT NOT NULL PRIMARY KEY,
-        movement_pattern_id TEXT NOT NULL,
-        name TEXT NOT NULL,
-        equipment_type TEXT NOT NULL,
-        origin TEXT NOT NULL,
-        archived INTEGER NOT NULL DEFAULT 0
-      );
-      CREATE TABLE manufacturers (
-        id TEXT NOT NULL PRIMARY KEY,
-        name TEXT NOT NULL,
-        origin TEXT NOT NULL,
-        archived INTEGER NOT NULL DEFAULT 0
-      );
-      CREATE TABLE machine_models (
-        id TEXT NOT NULL PRIMARY KEY,
-        manufacturer_id TEXT NOT NULL,
-        name TEXT NOT NULL,
-        origin TEXT NOT NULL,
-        archived INTEGER NOT NULL DEFAULT 0
-      );
-      CREATE TABLE gym_locations (
-        id TEXT NOT NULL PRIMARY KEY,
-        name TEXT NOT NULL,
-        is_default INTEGER NOT NULL DEFAULT 0,
-        archived INTEGER NOT NULL DEFAULT 0
-      );
-      CREATE TABLE workout_sessions (
-        id TEXT NOT NULL PRIMARY KEY,
-        gym_location_id TEXT NOT NULL,
-        started_at INTEGER NOT NULL,
-        finished_at INTEGER
-      );
-      CREATE TABLE workout_entries (
-        id TEXT NOT NULL PRIMARY KEY,
-        session_id TEXT NOT NULL,
-        exercise_variation_id TEXT NOT NULL,
-        machine_model_id TEXT,
-        position INTEGER NOT NULL
-      );
-      CREATE TABLE logged_sets (
-        id TEXT NOT NULL PRIMARY KEY,
-        workout_entry_id TEXT NOT NULL,
-        position INTEGER NOT NULL,
-        reps INTEGER NOT NULL DEFAULT 0,
-        load_kg REAL,
-        bodyweight_adjustment_kg REAL,
-        adjustment TEXT NOT NULL DEFAULT 'none'
-      );
-      CREATE TABLE app_settings (
-        key TEXT NOT NULL PRIMARY KEY,
-        value TEXT NOT NULL
-      );
-    ''');
-    final finishedAt = DateTime(2026, 8, 1, 12).millisecondsSinceEpoch ~/ 1000;
-    sqlite.execute("INSERT INTO gym_locations VALUES ('gym', 'Gym', 1, 0)");
-    sqlite.execute(
-      "INSERT INTO workout_sessions VALUES ('session', 'gym', $finishedAt, $finishedAt)",
-    );
-    sqlite.execute(
-      "INSERT INTO workout_entries VALUES ('entry', 'session', 'exercise', NULL, 0)",
-    );
-    sqlite.execute(
-      "INSERT INTO logged_sets VALUES ('set', 'entry', 0, 8, 50, NULL, 'none')",
-    );
-    sqlite.execute('PRAGMA user_version = 1');
-    sqlite.close();
+  for (final version in [1, 2, 3]) {
+    test(
+      'v$version migration preserves workouts, custom metadata and machine associations',
+      () async {
+        final directory = await Directory.systemTemp.createTemp(
+          'workout_v${version}_',
+        );
+        final file = File('${directory.path}/legacy.sqlite');
+        final sqlite = sqlite3.open(file.path);
+        sqlite.execute(await File('test/data/legacy_v1.sql').readAsString());
+        if (version >= 2) {
+          sqlite.execute('''
+          ALTER TABLE logged_sets ADD COLUMN is_completed INTEGER NOT NULL DEFAULT 0;
+          ALTER TABLE logged_sets ADD COLUMN completed_at INTEGER;
+          CREATE TABLE workout_routines (
+            id TEXT NOT NULL PRIMARY KEY, name TEXT NOT NULL,
+            created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
+          CREATE TABLE routine_exercises (
+            id TEXT NOT NULL PRIMARY KEY, routine_id TEXT NOT NULL REFERENCES workout_routines(id) ON DELETE CASCADE,
+            exercise_variation_id TEXT NOT NULL, machine_model_id TEXT,
+            position INTEGER NOT NULL, set_count INTEGER NOT NULL DEFAULT 1);
+        ''');
+        }
+        if (version >= 3) {
+          sqlite.execute('ALTER TABLE workout_sessions ADD COLUMN name TEXT');
+        }
+        sqlite.execute('''
+        INSERT INTO muscle_groups VALUES ('muscle-back', 'Back', 'seeded', 0);
+        INSERT INTO movement_patterns VALUES ('pattern-vertical-pull', 'muscle-back', 'Vertical pulling', 'seeded', 0);
+        INSERT INTO exercise_variations VALUES ('exercise-lat-pulldown', 'pattern-vertical-pull', 'Lat pulldown', 'machine', 'seeded', 0);
+        INSERT INTO exercise_variations VALUES ('custom', 'pattern-vertical-pull', 'My custom pull', 'machine', 'user', 0);
+        INSERT INTO manufacturers VALUES ('manufacturer-life-fitness', 'Life Fitness', 'seeded', 0);
+        INSERT INTO machine_models VALUES ('machine-life-signature-press', 'manufacturer-life-fitness', 'Signature Chest Press', 'seeded', 0);
+        INSERT INTO machine_models VALUES ('custom-model', 'manufacturer-life-fitness', 'My pull machine', 'user', 0);
+        INSERT INTO gym_locations VALUES ('gym', 'Gym', 1, 0);
+        INSERT INTO workout_sessions (id, gym_location_id, started_at, finished_at) VALUES ('session', 'gym', 1785585600, 1785589200);
+        INSERT INTO workout_entries VALUES ('legacy-mismatch', 'session', 'exercise-lat-pulldown', 'machine-life-signature-press', 0);
+        INSERT INTO workout_entries VALUES ('custom-entry', 'session', 'custom', 'custom-model', 1);
+        INSERT INTO logged_sets (id, workout_entry_id, position, reps, load_kg) VALUES ('set', 'legacy-mismatch', 0, 8, 50);
+        INSERT INTO logged_sets (id, workout_entry_id, position, reps, load_kg) VALUES ('custom-set', 'custom-entry', 0, 10, 30);
+        INSERT INTO app_settings VALUES ('weightUnit', 'pounds');
+      ''');
+        if (version >= 2) {
+          sqlite.execute(
+            "UPDATE logged_sets SET is_completed = 1, completed_at = 1785589200",
+          );
+          sqlite.execute(
+            "INSERT INTO workout_routines VALUES ('routine', 'Saved routine', 1785585600, 1785589200)",
+          );
+          sqlite.execute(
+            "INSERT INTO routine_exercises VALUES ('routine-entry', 'routine', 'custom', 'custom-model', 0, 2)",
+          );
+        }
+        if (version >= 3) {
+          sqlite.execute("UPDATE workout_sessions SET name = 'Saved name'");
+        }
+        sqlite.execute('PRAGMA user_version = $version');
+        sqlite.close();
 
-    final database = AppDatabase.forTesting(NativeDatabase(file));
-    final migrated = await database
-        .customSelect(
-          'SELECT is_completed, completed_at FROM logged_sets WHERE id = ?',
-          variables: [const Variable<String>('set')],
-        )
-        .getSingle();
-    final version = await database
-        .customSelect('PRAGMA user_version')
-        .getSingle();
-    final migratedSession = await database
-        .customSelect(
-          'SELECT name FROM workout_sessions WHERE id = ?',
-          variables: [const Variable<String>('session')],
-        )
-        .getSingle();
-    expect(version.read<int>('user_version'), 3);
-    expect(migrated.read<int>('is_completed'), 1);
-    expect(migrated.read<int?>('completed_at'), isNotNull);
-    expect(migratedSession.read<String?>('name'), isNull);
-    expect(
-      await database.customSelect('SELECT * FROM workout_routines').get(),
-      isEmpty,
+        final database = AppDatabase.forTesting(NativeDatabase(file));
+        final repository = DriftWorkoutRepository(database);
+        await repository.initialize();
+        final history = (await repository.loadHistory()).single;
+        expect(database.schemaVersion, 4);
+        expect(history.name, version >= 3 ? 'Saved name' : null);
+        expect(history.muscleLabels, ['Back']);
+        expect(history.exercises, hasLength(2));
+        expect(history.exercises.first.sets.single.reps, 8);
+        expect(history.exercises.first.sets.single.loadKg, 50);
+        expect(history.exercises.first.sets.single.isCompleted, isTrue);
+        expect(
+          history.exercises.first.exercise.machineModel!.id,
+          'machine-life-signature-press',
+        );
+        expect(
+          history.exercises.first.exercise.manufacturer!.name,
+          'Life Fitness',
+        );
+        expect(history.exercises.last.exercise.execution, isNull);
+        expect(history.exercises.last.exercise.independentLimbs, isFalse);
+        final catalog = await repository.loadCatalog();
+        expect(
+          catalog.compatibleModels(
+            history.exercises.first.exercise,
+            'manufacturer-life-fitness',
+          ),
+          isEmpty,
+        );
+        expect(
+          catalog
+              .compatibleModels(
+                history.exercises.last.exercise,
+                'manufacturer-life-fitness',
+              )
+              .single
+              .id,
+          'custom-model',
+        );
+        if (version >= 2) {
+          final routine = (await repository.loadRoutines()).single;
+          expect(
+            routine.exercises.single.exercise.manufacturer!.name,
+            'Life Fitness',
+          );
+          expect(
+            routine.exercises.single.exercise.machineModel!.id,
+            'custom-model',
+          );
+        }
+        await repository.close();
+        // Verify migration is persisted and a second open is idempotent.
+        final reopened = DriftWorkoutRepository(
+          AppDatabase.forTesting(NativeDatabase(file)),
+        );
+        await reopened.initialize();
+        expect(
+          (await reopened.loadHistory())
+              .single
+              .exercises
+              .first
+              .sets
+              .single
+              .loadKg,
+          50,
+        );
+        await reopened.close();
+        await directory.delete(recursive: true);
+      },
     );
-    await database.close();
-    await directory.delete(recursive: true);
-  });
-
-  test('v2 migration adds optional workout names', () async {
-    final directory = await Directory.systemTemp.createTemp(
-      'workout_tracker_v2_migration_',
-    );
-    final file = File('${directory.path}/v2.sqlite');
-    final sqlite = sqlite3.open(file.path);
-    sqlite.execute('''
-      CREATE TABLE workout_sessions (
-        id TEXT NOT NULL PRIMARY KEY,
-        gym_location_id TEXT NOT NULL,
-        started_at INTEGER NOT NULL,
-        finished_at INTEGER
-      );
-    ''');
-    final finishedAt = DateTime(2026, 8, 1, 12).millisecondsSinceEpoch ~/ 1000;
-    sqlite.execute(
-      "INSERT INTO workout_sessions VALUES ('session', 'gym', $finishedAt, $finishedAt)",
-    );
-    sqlite.execute('PRAGMA user_version = 2');
-    sqlite.close();
-
-    final database = AppDatabase.forTesting(NativeDatabase(file));
-    final migrated = await database
-        .customSelect(
-          'SELECT name FROM workout_sessions WHERE id = ?',
-          variables: [const Variable<String>('session')],
-        )
-        .getSingle();
-    final version = await database
-        .customSelect('PRAGMA user_version')
-        .getSingle();
-    expect(version.read<int>('user_version'), 3);
-    expect(migrated.read<String?>('name'), isNull);
-    await database.close();
-    await directory.delete(recursive: true);
-  });
+  }
 }

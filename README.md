@@ -12,7 +12,18 @@ dart run build_runner build
 flutter run
 ```
 
-Android and iOS platform projects are included. Android is the primary MVP target; building iOS requires macOS and Xcode.
+Android, iOS, and Linux platform projects are included. To run the app as a
+native application on a Linux computer, use:
+
+```sh
+flutter run -d linux
+```
+
+To create a standalone local Linux build, use `flutter build linux --release`.
+The executable and its required libraries will be written to
+`build/linux/x64/release/bundle/`.
+
+Android is the primary mobile target; building iOS requires macOS and Xcode.
 
 ## Verify
 

@@ -267,6 +267,84 @@ class DriftWorkoutRepository implements WorkoutRepository {
           ),
         ], mode: InsertMode.insertOrIgnore);
       });
+      await db.batch((batch) {
+        batch.insertAll(db.exerciseVariations, [
+          ExerciseVariationsCompanion.insert(
+            id: 'exercise-machine-chest-press',
+            movementPatternId: 'pattern-horizontal-push',
+            name: 'Machine chest press',
+            equipmentType: 'machine',
+            origin: 'seeded',
+          ),
+          ExerciseVariationsCompanion.insert(
+            id: 'exercise-machine-row',
+            movementPatternId: 'pattern-horizontal-pull',
+            name: 'Machine row',
+            equipmentType: 'machine',
+            origin: 'seeded',
+          ),
+        ], mode: InsertMode.insertOrIgnore);
+        batch.insertAll(db.exerciseMachineCompatibility, [
+          ExerciseMachineCompatibilityCompanion.insert(
+            exerciseVariationId: 'exercise-lat-pulldown',
+            machineModelId: 'machine-technogym-selection-pulldown',
+          ),
+          ExerciseMachineCompatibilityCompanion.insert(
+            exerciseVariationId: 'exercise-machine-row',
+            machineModelId: 'machine-hammer-iso-row',
+          ),
+          ExerciseMachineCompatibilityCompanion.insert(
+            exerciseVariationId: 'exercise-machine-chest-press',
+            machineModelId: 'machine-life-signature-press',
+          ),
+        ], mode: InsertMode.insertOrIgnore);
+      });
+      final metadataApplied = await (db.select(
+        db.appSettings,
+      )..where((t) => t.key.equals('catalogMetadataV4'))).getSingleOrNull();
+      if (metadataApplied == null) {
+        // Explicit catalog audit, never infer equipment/execution from display names.
+        await (db.update(db.exerciseVariations)..where(
+              (t) =>
+                  t.origin.equals('seeded') &
+                  t.id.isIn([
+                    'exercise-pull-up',
+                    'exercise-chin-up',
+                    'exercise-neutral-pull-up',
+                    'exercise-barbell-row',
+                    'exercise-bench-press',
+                    'exercise-overhead-press',
+                    'exercise-squat',
+                    'exercise-rdl',
+                    'exercise-crunch',
+                  ]),
+            ))
+            .write(
+              const ExerciseVariationsCompanion(execution: Value('bilateral')),
+            );
+        await (db.update(db.exerciseVariations)..where(
+              (t) =>
+                  t.origin.equals('seeded') &
+                  t.id.isIn([
+                    'exercise-cable-row',
+                    'exercise-triceps-pushdown',
+                  ]),
+            ))
+            .write(
+              const ExerciseVariationsCompanion(equipmentType: Value('cable')),
+            );
+        await (db.update(db.machineModels)..where(
+              (t) =>
+                  t.id.equals('machine-hammer-iso-row') &
+                  t.origin.equals('seeded'),
+            ))
+            .write(const MachineModelsCompanion(independentLimbs: Value(true)));
+        await db
+            .into(db.appSettings)
+            .insert(
+              AppSettingsCompanion.insert(key: 'catalogMetadataV4', value: '1'),
+            );
+      }
       final locationCount = await db.gymLocations.count().getSingle();
       if (locationCount == 0) {
         await db
@@ -285,26 +363,47 @@ class DriftWorkoutRepository implements WorkoutRepository {
             AppSettingsCompanion.insert(key: 'weightUnit', value: 'kilograms'),
             mode: InsertMode.insertOrIgnore,
           );
+      await db
+          .into(db.appSettings)
+          .insert(
+            AppSettingsCompanion.insert(key: 'themePreference', value: 'dark'),
+            mode: InsertMode.insertOrIgnore,
+          );
     });
   }
 
   @override
-  Future<CatalogSnapshot> loadCatalog() async {
-    final muscles = await (db.select(
-      db.muscleGroups,
-    )..where((t) => t.archived.equals(false))).get();
-    final patterns = await (db.select(
-      db.movementPatterns,
-    )..where((t) => t.archived.equals(false))).get();
-    final variations = await (db.select(
-      db.exerciseVariations,
-    )..where((t) => t.archived.equals(false))).get();
-    final manufacturers = await (db.select(
-      db.manufacturers,
-    )..where((t) => t.archived.equals(false))).get();
-    final machineRows = await (db.select(
-      db.machineModels,
-    )..where((t) => t.archived.equals(false))).get();
+  Future<CatalogSnapshot> loadCatalog() => _loadCatalog();
+
+  Future<CatalogSnapshot> _loadCatalog({bool includeArchived = false}) async {
+    final muscles =
+        await (db.select(db.muscleGroups)..where(
+              (t) => t.archived.equals(false) | Constant(includeArchived),
+            ))
+            .get();
+    final patterns =
+        await (db.select(db.movementPatterns)..where(
+              (t) => t.archived.equals(false) | Constant(includeArchived),
+            ))
+            .get();
+    final variations =
+        await (db.select(db.exerciseVariations)..where(
+              (t) => t.archived.equals(false) | Constant(includeArchived),
+            ))
+            .get();
+    final manufacturers =
+        await (db.select(db.manufacturers)..where(
+              (t) => t.archived.equals(false) | Constant(includeArchived),
+            ))
+            .get();
+    final machineRows =
+        await (db.select(db.machineModels)..where(
+              (t) => t.archived.equals(false) | Constant(includeArchived),
+            ))
+            .get();
+    final compatibility = await db
+        .select(db.exerciseMachineCompatibility)
+        .get();
     final muscleById = {for (final item in muscles) item.id: item};
     final patternById = {for (final item in patterns) item.id: item};
     final manufacturerById = {for (final item in manufacturers) item.id: item};
@@ -315,6 +414,11 @@ class DriftWorkoutRepository implements WorkoutRepository {
         name: machine.name,
         manufacturerId: maker.id,
         manufacturerName: maker.name,
+        independentLimbs: machine.independentLimbs,
+        compatibleExerciseIds: compatibility
+            .where((link) => link.machineModelId == machine.id)
+            .map((link) => link.exerciseVariationId)
+            .toList(),
       );
     }).toList()..sort((a, b) => a.displayName.compareTo(b.displayName));
     final exercises = variations.map((variation) {
@@ -328,6 +432,10 @@ class DriftWorkoutRepository implements WorkoutRepository {
         movementPatternId: pattern.id,
         movementPatternName: pattern.name,
         equipmentType: EquipmentType.values.byName(variation.equipmentType),
+        execution: variation.execution == null
+            ? null
+            : ExerciseExecution.values.byName(variation.execution!),
+        independentLimbs: variation.independentLimbs,
       );
     }).toList()..sort((a, b) => a.name.compareTo(b.name));
     return CatalogSnapshot(
@@ -345,6 +453,11 @@ class DriftWorkoutRepository implements WorkoutRepository {
           .toList(),
       exercises: exercises,
       machines: machines,
+      manufacturers:
+          manufacturers
+              .map((m) => ManufacturerInfo(id: m.id, name: m.name))
+              .toList()
+            ..sort((a, b) => a.name.compareTo(b.name)),
     );
   }
 
@@ -379,6 +492,24 @@ class DriftWorkoutRepository implements WorkoutRepository {
       .into(db.appSettings)
       .insertOnConflictUpdate(
         AppSettingsCompanion.insert(key: 'weightUnit', value: unit.name),
+      );
+
+  @override
+  Future<AppThemePreference> loadThemePreference() async {
+    final row = await (db.select(
+      db.appSettings,
+    )..where((t) => t.key.equals('themePreference'))).getSingleOrNull();
+    return AppThemePreference.values.byName(row?.value ?? 'dark');
+  }
+
+  @override
+  Future<void> setThemePreference(AppThemePreference preference) => db
+      .into(db.appSettings)
+      .insertOnConflictUpdate(
+        AppSettingsCompanion.insert(
+          key: 'themePreference',
+          value: preference.name,
+        ),
       );
 
   @override
@@ -472,7 +603,21 @@ class DriftWorkoutRepository implements WorkoutRepository {
     required String muscleGroupId,
     required String movementPatternId,
     required EquipmentType equipmentType,
+    ExerciseExecution? execution,
+    bool independentLimbs = false,
   }) async {
+    final pattern =
+        await (db.select(db.movementPatterns)..where(
+              (p) =>
+                  p.id.equals(movementPatternId) &
+                  p.muscleGroupId.equals(muscleGroupId),
+            ))
+            .getSingleOrNull();
+    if (pattern == null) {
+      throw ArgumentError(
+        'Movement pattern must belong to the selected muscle.',
+      );
+    }
     final id = _uuid.v4();
     await db
         .into(db.exerciseVariations)
@@ -483,6 +628,8 @@ class DriftWorkoutRepository implements WorkoutRepository {
             name: name.trim(),
             equipmentType: equipmentType.name,
             origin: 'user',
+            execution: Value(execution?.name),
+            independentLimbs: Value(independentLimbs),
           ),
         );
     return (await loadCatalog()).exercises.firstWhere((e) => e.id == id);
@@ -515,7 +662,20 @@ class DriftWorkoutRepository implements WorkoutRepository {
   Future<MachineModelInfo> addMachineModel({
     required String manufacturerName,
     required String modelName,
+    String? exerciseId,
+    bool independentLimbs = false,
   }) async {
+    if (manufacturerName.trim().isEmpty || modelName.trim().isEmpty) {
+      throw ArgumentError('Manufacturer and model names cannot be empty.');
+    }
+    if (exerciseId != null) {
+      final exercise = (await loadCatalog()).exercises.firstWhere(
+        (e) => e.id == exerciseId,
+      );
+      if (!exercise.supportsMachineSelection) {
+        throw ArgumentError('This exercise does not use a machine.');
+      }
+    }
     final existing = await db.select(db.manufacturers).get();
     var manufacturer = existing
         .where(
@@ -545,10 +705,23 @@ class DriftWorkoutRepository implements WorkoutRepository {
             id: machineId,
             manufacturerId: manufacturer.id,
             name: modelName.trim(),
+            independentLimbs: Value(independentLimbs),
             origin: 'user',
           ),
         );
+    if (exerciseId != null) {
+      await db
+          .into(db.exerciseMachineCompatibility)
+          .insert(
+            ExerciseMachineCompatibilityCompanion.insert(
+              exerciseVariationId: exerciseId,
+              machineModelId: machineId,
+            ),
+          );
+    }
     return MachineModelInfo(
+      compatibleExerciseIds: [?exerciseId],
+      independentLimbs: independentLimbs,
       id: machineId,
       name: modelName.trim(),
       manufacturerId: manufacturer.id,
@@ -633,6 +806,7 @@ class DriftWorkoutRepository implements WorkoutRepository {
                 machineModelId: Value(
                   routineExercise.exercise.machineModel?.id,
                 ),
+                manufacturerId: Value(routineExercise.exercise.manufacturerId),
                 position: routineExercise.position,
               ),
             );
@@ -683,6 +857,7 @@ class DriftWorkoutRepository implements WorkoutRepository {
                 routineId: id,
                 exerciseVariationId: entry.exercise.id,
                 machineModelId: Value(entry.exercise.machineModel?.id),
+                manufacturerId: Value(entry.exercise.manufacturerId),
                 position: entry.position,
                 setCount: Value(entry.sets.isEmpty ? 1 : entry.sets.length),
               ),
@@ -731,10 +906,52 @@ class DriftWorkoutRepository implements WorkoutRepository {
             sessionId: sessionId,
             exerciseVariationId: exercise.id,
             machineModelId: Value(exercise.machineModel?.id),
+            manufacturerId: Value(exercise.manufacturerId),
             position: rows.length,
           ),
         );
     await addSet(entryId);
+  }
+
+  @override
+  Future<void> setExerciseMachine(
+    String entryId, {
+    String? manufacturerId,
+    String? machineModelId,
+  }) async {
+    final entry = await (db.select(
+      db.workoutEntries,
+    )..where((t) => t.id.equals(entryId))).getSingle();
+    final catalog = await _loadCatalog(includeArchived: true);
+    final exercise = catalog.exercises.firstWhere(
+      (e) => e.id == entry.exerciseVariationId,
+    );
+    if (manufacturerId != null) {
+      if (!exercise.supportsMachineSelection ||
+          !catalog.manufacturers.any((m) => m.id == manufacturerId)) {
+        throw ArgumentError('Select a valid manufacturer for this exercise.');
+      }
+    }
+    if (machineModelId != null &&
+        !catalog
+            .compatibleModels(exercise, manufacturerId)
+            .any((m) => m.id == machineModelId)) {
+      // Legacy mismatches remain readable and can be cleared, but cannot be newly assigned.
+      if (entry.machineModelId != machineModelId ||
+          entry.manufacturerId != manufacturerId) {
+        throw ArgumentError(
+          'The model is not compatible with this exercise and manufacturer.',
+        );
+      }
+    }
+    await (db.update(
+      db.workoutEntries,
+    )..where((t) => t.id.equals(entryId))).write(
+      WorkoutEntriesCompanion(
+        manufacturerId: Value(manufacturerId),
+        machineModelId: Value(machineModelId),
+      ),
+    );
   }
 
   @override
@@ -974,7 +1191,8 @@ class DriftWorkoutRepository implements WorkoutRepository {
       for (final entry in session.exercises) {
         if (entry.exercise.id == exercise.id &&
             entry.exercise.machineModel?.id == exercise.machineModel?.id &&
-            entry.sets.isNotEmpty) {
+            entry.exercise.manufacturerId == exercise.manufacturerId &&
+            entry.sets.any((set) => set.isCompleted)) {
           final performedAt = session.finishedAt ?? session.startedAt;
           return entry.sets
               .where((set) => set.isCompleted)
@@ -996,7 +1214,7 @@ class DriftWorkoutRepository implements WorkoutRepository {
   }
 
   Future<WorkoutSessionModel> _hydrateSession(WorkoutSession row) async {
-    final catalog = await loadCatalog();
+    final catalog = await _loadCatalog(includeArchived: true);
     final locations = await loadLocations();
     final location =
         locations.where((e) => e.id == row.gymLocationId).firstOrNull ??
@@ -1020,6 +1238,14 @@ class DriftWorkoutRepository implements WorkoutRepository {
           catalog.machines
               .where((e) => e.id == entry.machineModelId)
               .firstOrNull,
+        );
+      }
+      if (entry.manufacturerId != null) {
+        exercise = exercise.withEquipmentSelection(
+          catalog.manufacturers
+              .where((m) => m.id == entry.manufacturerId)
+              .firstOrNull,
+          exercise.machineModel,
         );
       }
       final setRows =
@@ -1063,7 +1289,7 @@ class DriftWorkoutRepository implements WorkoutRepository {
   }
 
   Future<WorkoutRoutineModel> _hydrateRoutine(WorkoutRoutine row) async {
-    final catalog = await loadCatalog();
+    final catalog = await _loadCatalog(includeArchived: true);
     final entries =
         await (db.select(db.routineExercises)
               ..where((t) => t.routineId.equals(row.id))
@@ -1083,6 +1309,14 @@ class DriftWorkoutRepository implements WorkoutRepository {
             catalog.machines
                 .where((machine) => machine.id == entry.machineModelId)
                 .firstOrNull,
+          );
+        }
+        if (entry.manufacturerId != null) {
+          exercise = exercise.withEquipmentSelection(
+            catalog.manufacturers
+                .where((m) => m.id == entry.manufacturerId)
+                .firstOrNull,
+            exercise.machineModel,
           );
         }
         return RoutineExerciseModel(

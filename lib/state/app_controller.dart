@@ -54,6 +54,7 @@ class AppController extends ChangeNotifier {
   List<WorkoutRoutineModel> routines = const [];
   WorkoutSessionModel? activeWorkout;
   WeightUnit weightUnit = WeightUnit.kilograms;
+  AppThemePreference themePreference = AppThemePreference.dark;
 
   GymLocationModel? get defaultLocation =>
       locations.where((location) => location.isDefault).firstOrNull ??
@@ -75,6 +76,7 @@ class AppController extends ChangeNotifier {
     catalog = await repository.loadCatalog();
     locations = await repository.loadLocations();
     weightUnit = await repository.loadWeightUnit();
+    themePreference = await repository.loadThemePreference();
     activeWorkout = await repository.loadActiveWorkout();
     history = await repository.loadHistory();
     routines = await repository.loadRoutines();
@@ -120,6 +122,20 @@ class AppController extends ChangeNotifier {
     if (workout == null) return;
     await repository.addExercise(workout.id, exercise);
     await _refreshWorkout();
+  }
+
+  Future<void> setExerciseMachine(
+    String entryId, {
+    String? manufacturerId,
+    String? machineModelId,
+  }) async {
+    await flushSetWrites();
+    await repository.setExerciseMachine(
+      entryId,
+      manufacturerId: manufacturerId,
+      machineModelId: machineModelId,
+    );
+    await refresh();
   }
 
   Future<void> removeExercise(String id) async {
@@ -199,6 +215,7 @@ class AppController extends ChangeNotifier {
     if (workout == null) return null;
     await flushSetWrites();
     final result = await repository.finishWorkout(workout.id, name: name);
+    await restTimer.skip();
     await refresh();
     return result;
   }
@@ -207,6 +224,7 @@ class AppController extends ChangeNotifier {
     final workout = activeWorkout;
     if (workout == null) return;
     await repository.discardWorkout(workout.id);
+    await restTimer.skip();
     await refresh();
   }
 
@@ -215,6 +233,18 @@ class AppController extends ChangeNotifier {
     await repository.setWeightUnit(unit);
     weightUnit = unit;
     activeWorkout = await repository.loadActiveWorkout();
+    notifyListeners();
+  }
+
+  Future<void> setThemePreference(AppThemePreference preference) async {
+    await repository.setThemePreference(preference);
+    themePreference = preference;
+    notifyListeners();
+  }
+
+  void clearActionError() {
+    if (actionError == null) return;
+    actionError = null;
     notifyListeners();
   }
 
@@ -238,12 +268,16 @@ class AppController extends ChangeNotifier {
     required String muscleGroupId,
     required String movementPatternId,
     required EquipmentType equipmentType,
+    ExerciseExecution? execution,
+    bool independentLimbs = false,
   }) async {
     final exercise = await repository.addCustomExercise(
       name: name,
       muscleGroupId: muscleGroupId,
       movementPatternId: movementPatternId,
       equipmentType: equipmentType,
+      execution: execution,
+      independentLimbs: independentLimbs,
     );
     catalog = await repository.loadCatalog();
     notifyListeners();
@@ -266,10 +300,14 @@ class AppController extends ChangeNotifier {
   Future<MachineModelInfo> addMachineModel({
     required String manufacturerName,
     required String modelName,
+    String? exerciseId,
+    bool independentLimbs = false,
   }) async {
     final machine = await repository.addMachineModel(
       manufacturerName: manufacturerName,
       modelName: modelName,
+      exerciseId: exerciseId,
+      independentLimbs: independentLimbs,
     );
     catalog = await repository.loadCatalog();
     notifyListeners();
@@ -329,6 +367,7 @@ class AppController extends ChangeNotifier {
 
   Future<void> _refreshWorkout() async {
     activeWorkout = await repository.loadActiveWorkout();
+    history = await repository.loadHistory();
     notifyListeners();
   }
 }

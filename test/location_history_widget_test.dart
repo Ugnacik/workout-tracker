@@ -45,7 +45,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(_hintFor(tester, 'Reps'), '10');
-    expect(_hintFor(tester, 'kg'), '50');
+    expect(_hintFor(tester, 'Load (kg)'), '50');
 
     final locationDropdown = find.byWidgetPredicate(
       (widget) =>
@@ -57,7 +57,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(_hintFor(tester, 'Reps'), '12');
-    expect(_hintFor(tester, 'kg'), '25');
+    expect(_hintFor(tester, 'Load (kg)'), '25');
 
     await tester.pumpWidget(const SizedBox.shrink());
     await database.close();

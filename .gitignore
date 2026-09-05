@@ -55,3 +55,8 @@ app.*.map.json
 
 # Widget Preview related
 .widget_preview/
+
+# Local packaged APKs and generated implementation diagnostics
+/exports/
+/audit/request-implementation/*
+!/audit/request-implementation/REPORT.md

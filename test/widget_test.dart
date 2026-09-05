@@ -29,9 +29,9 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Back'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Neutral-grip pull-up'));
+    await tester.enterText(find.byType(TextField), 'Neutral-grip');
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Add to workout'));
+    await tester.tap(find.text('Neutral-grip pull-up'));
     await tester.pumpAndSettle();
 
     expect(find.text('Neutral-grip pull-up'), findsOneWidget);

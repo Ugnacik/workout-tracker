@@ -27,6 +27,9 @@ class MovementPatterns extends Table {
 }
 
 class ExerciseVariations extends Table {
+  TextColumn get execution => text().nullable()();
+  BoolColumn get independentLimbs =>
+      boolean().withDefault(const Constant(false))();
   TextColumn get id => text()();
   TextColumn get movementPatternId => text()();
   TextColumn get name => text()();
@@ -47,6 +50,8 @@ class Manufacturers extends Table {
 }
 
 class MachineModels extends Table {
+  BoolColumn get independentLimbs =>
+      boolean().withDefault(const Constant(false))();
   TextColumn get id => text()();
   TextColumn get manufacturerId => text()();
   TextColumn get name => text()();
@@ -54,6 +59,13 @@ class MachineModels extends Table {
   BoolColumn get archived => boolean().withDefault(const Constant(false))();
   @override
   Set<Column<Object>> get primaryKey => {id};
+}
+
+class ExerciseMachineCompatibility extends Table {
+  TextColumn get exerciseVariationId => text()();
+  TextColumn get machineModelId => text()();
+  @override
+  Set<Column<Object>> get primaryKey => {exerciseVariationId, machineModelId};
 }
 
 class GymLocations extends Table {
@@ -76,6 +88,7 @@ class WorkoutSessions extends Table {
 }
 
 class WorkoutEntries extends Table {
+  TextColumn get manufacturerId => text().nullable()();
   TextColumn get id => text()();
   TextColumn get sessionId => text()();
   TextColumn get exerciseVariationId => text()();
@@ -109,6 +122,7 @@ class WorkoutRoutines extends Table {
 }
 
 class RoutineExercises extends Table {
+  TextColumn get manufacturerId => text().nullable()();
   TextColumn get id => text()();
   TextColumn get routineId =>
       text().references(WorkoutRoutines, #id, onDelete: KeyAction.cascade)();
@@ -134,6 +148,7 @@ class AppSettings extends Table {
     ExerciseVariations,
     Manufacturers,
     MachineModels,
+    ExerciseMachineCompatibility,
     GymLocations,
     WorkoutSessions,
     WorkoutEntries,
@@ -148,7 +163,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -180,6 +195,41 @@ class AppDatabase extends _$AppDatabase {
       }
       if (from < 3) {
         await migrator.addColumn(workoutSessions, workoutSessions.name);
+      }
+      if (from < 4) {
+        await migrator.addColumn(
+          exerciseVariations,
+          exerciseVariations.execution,
+        );
+        await migrator.addColumn(
+          exerciseVariations,
+          exerciseVariations.independentLimbs,
+        );
+        await migrator.addColumn(machineModels, machineModels.independentLimbs);
+        await migrator.addColumn(workoutEntries, workoutEntries.manufacturerId);
+        if (from >= 2) {
+          await migrator.addColumn(
+            routineExercises,
+            routineExercises.manufacturerId,
+          );
+        }
+        await migrator.createTable(exerciseMachineCompatibility);
+        for (final table in ['workout_entries', 'routine_exercises']) {
+          await customStatement('''
+            UPDATE $table SET manufacturer_id = (
+              SELECT manufacturer_id FROM machine_models
+              WHERE machine_models.id = $table.machine_model_id
+            )
+          ''');
+          // Unknown custom models retain their demonstrated associations.
+          // Known seeded models receive audited compatibility during seeding.
+          await customStatement('''
+            INSERT OR IGNORE INTO exercise_machine_compatibility
+              (exercise_variation_id, machine_model_id)
+            SELECT exercise_variation_id, machine_model_id FROM $table
+            WHERE machine_model_id IN (SELECT id FROM machine_models WHERE origin = 'user')
+          ''');
+        }
       }
     },
     beforeOpen: (details) async {

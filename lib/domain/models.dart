@@ -1,6 +1,6 @@
 enum CatalogOrigin { seeded, user }
 
-enum EquipmentType { bodyweight, dumbbell, barbell, machine, other }
+enum EquipmentType { bodyweight, dumbbell, barbell, machine, cable, other }
 
 extension EquipmentTypeLabel on EquipmentType {
   String get label => switch (this) {
@@ -8,11 +8,29 @@ extension EquipmentTypeLabel on EquipmentType {
     EquipmentType.dumbbell => 'Dumbbell',
     EquipmentType.barbell => 'Barbell',
     EquipmentType.machine => 'Machine',
+    EquipmentType.cable => 'Cable',
     EquipmentType.other => 'Other',
   };
 }
 
+enum ExerciseExecution { unilateral, bilateral }
+
+extension ExerciseExecutionLabel on ExerciseExecution {
+  String get label => switch (this) {
+    ExerciseExecution.unilateral => 'One side at a time',
+    ExerciseExecution.bilateral => 'Both sides together',
+  };
+}
+
+class ManufacturerInfo {
+  const ManufacturerInfo({required this.id, required this.name});
+  final String id;
+  final String name;
+}
+
 enum WeightUnit { kilograms, pounds }
+
+enum AppThemePreference { dark, light, system }
 
 extension WeightUnitLabel on WeightUnit {
   String get shortLabel => this == WeightUnit.kilograms ? 'kg' : 'lb';
@@ -49,11 +67,18 @@ class MachineModelInfo {
     required this.name,
     required this.manufacturerId,
     required this.manufacturerName,
+    this.compatibleExerciseIds = const [],
+    this.independentLimbs = false,
   });
   final String id;
   final String name;
   final String manufacturerId;
   final String manufacturerName;
+  final List<String> compatibleExerciseIds;
+  final bool independentLimbs;
+
+  bool supports(ExerciseChoice exercise) =>
+      compatibleExerciseIds.contains(exercise.id);
 
   String get displayName => '$manufacturerName · $name';
 }
@@ -68,6 +93,9 @@ class ExerciseChoice {
     required this.movementPatternName,
     required this.equipmentType,
     this.machineModel,
+    this.manufacturer,
+    this.execution,
+    this.independentLimbs = false,
   });
 
   final String id;
@@ -78,8 +106,42 @@ class ExerciseChoice {
   final String movementPatternName;
   final EquipmentType equipmentType;
   final MachineModelInfo? machineModel;
+  final ManufacturerInfo? manufacturer;
+  final ExerciseExecution? execution;
+  final bool independentLimbs;
 
-  ExerciseChoice withMachine(MachineModelInfo? machine) => ExerciseChoice(
+  String? get manufacturerId =>
+      manufacturer?.id ?? machineModel?.manufacturerId;
+  String? get machineDescription =>
+      machineModel?.displayName ?? manufacturer?.name;
+  bool get supportsMachineSelection =>
+      equipmentType == EquipmentType.machine ||
+      equipmentType == EquipmentType.cable;
+
+  List<String> get labels => [
+    muscleGroupName,
+    movementPatternName,
+    if (equipmentType != EquipmentType.other) equipmentType.label,
+    if (execution != null) execution!.label,
+    if (independentLimbs || (machineModel?.independentLimbs ?? false))
+      'Independent arms/legs',
+  ];
+
+  ExerciseChoice withMachine(MachineModelInfo? machine) =>
+      withEquipmentSelection(
+        machine == null
+            ? null
+            : ManufacturerInfo(
+                id: machine.manufacturerId,
+                name: machine.manufacturerName,
+              ),
+        machine,
+      );
+
+  ExerciseChoice withEquipmentSelection(
+    ManufacturerInfo? maker,
+    MachineModelInfo? machine,
+  ) => ExerciseChoice(
     id: id,
     name: name,
     muscleGroupId: muscleGroupId,
@@ -88,6 +150,9 @@ class ExerciseChoice {
     movementPatternName: movementPatternName,
     equipmentType: equipmentType,
     machineModel: machine,
+    manufacturer: maker,
+    execution: execution,
+    independentLimbs: independentLimbs,
   );
 }
 
@@ -161,6 +226,17 @@ class WorkoutSessionModel {
   final DateTime startedAt;
   final DateTime? finishedAt;
   final List<WorkoutExerciseModel> exercises;
+
+  // Derived on every hydration, so historical edits cannot leave stale labels.
+  List<String> get muscleLabels {
+    final names = <String, String>{};
+    for (final entry in exercises) {
+      if (entry.sets.any((set) => set.isCompleted)) {
+        names[entry.exercise.muscleGroupId] = entry.exercise.muscleGroupName;
+      }
+    }
+    return names.values.toSet().toList()..sort();
+  }
 }
 
 class RoutineExerciseModel {
@@ -215,11 +291,29 @@ class CatalogSnapshot {
     required this.patterns,
     required this.exercises,
     required this.machines,
+    this.manufacturers = const [],
   });
   final List<MuscleGroupModel> muscles;
   final List<MovementPatternModel> patterns;
   final List<ExerciseChoice> exercises;
   final List<MachineModelInfo> machines;
+  final List<ManufacturerInfo> manufacturers;
+
+  List<MovementPatternModel> patternsForMuscle(String? muscleId) =>
+      muscleId == null
+      ? []
+      : patterns.where((p) => p.muscleGroupId == muscleId).toList();
+
+  List<MachineModelInfo> compatibleModels(
+    ExerciseChoice exercise,
+    String? manufacturerId,
+  ) => manufacturerId == null
+      ? []
+      : machines
+            .where(
+              (m) => m.manufacturerId == manufacturerId && m.supports(exercise),
+            )
+            .toList();
 }
 
 class ExerciseFilter {
@@ -257,10 +351,12 @@ List<ExerciseChoice> filterExercises(
       return false;
     }
     if (filter.manufacturerId != null &&
-        exercise.machineModel?.manufacturerId != filter.manufacturerId) {
-      // Machine models are chosen after the exercise, so machine exercises
-      // remain visible when filtering by manufacturer.
-      if (exercise.equipmentType != EquipmentType.machine) return false;
+        !catalog.machines.any(
+          (model) =>
+              model.manufacturerId == filter.manufacturerId &&
+              model.supports(exercise),
+        )) {
+      return false;
     }
     if (query.isEmpty) return true;
     return exercise.name.toLowerCase().contains(query) ||

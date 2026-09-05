@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../domain/models.dart';
 import '../../state/app_controller.dart';
+import '../theme/app_tokens.dart';
+import '../widgets/app_components.dart';
 
 class ExercisePickerScreen extends ConsumerStatefulWidget {
   const ExercisePickerScreen({super.key});
@@ -14,14 +16,18 @@ class ExercisePickerScreen extends ConsumerStatefulWidget {
 
 class _ExercisePickerScreenState extends ConsumerState<ExercisePickerScreen> {
   final search = TextEditingController();
+  final searchFocus = FocusNode();
   String? muscleId;
   String? patternId;
   EquipmentType? equipment;
-  String? manufacturerId;
+
+  int get activeFilterCount =>
+      [muscleId, patternId, equipment].where((value) => value != null).length;
 
   @override
   void dispose() {
     search.dispose();
+    searchFocus.dispose();
     super.dispose();
   }
 
@@ -29,9 +35,6 @@ class _ExercisePickerScreenState extends ConsumerState<ExercisePickerScreen> {
   Widget build(BuildContext context) {
     final controller = ref.watch(appControllerProvider);
     final catalog = controller.catalog;
-    final patterns = catalog.patterns
-        .where((item) => muscleId == null || item.muscleGroupId == muscleId)
-        .toList();
     final results = filterExercises(
       catalog,
       ExerciseFilter(
@@ -39,86 +42,249 @@ class _ExercisePickerScreenState extends ConsumerState<ExercisePickerScreen> {
         muscleGroupId: muscleId,
         movementPatternId: patternId,
         equipmentType: equipment,
-        manufacturerId: manufacturerId,
       ),
     );
-    final manufacturers = {
-      for (final machine in catalog.machines)
-        machine.manufacturerId: machine.manufacturerName,
-    };
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Choose exercise'),
+        title: const Text('Exercises'),
         actions: [
-          IconButton(
-            tooltip: 'Create exercise',
-            onPressed: () => _createExercise(controller),
-            icon: const Icon(Icons.add_circle_outline),
+          Tooltip(
+            message: 'Create exercise',
+            child: TextButton.icon(
+              onPressed: () => _createExercise(controller),
+              icon: MediaQuery.textScalerOf(context).scale(14) >= 21
+                  ? const SizedBox.shrink()
+                  : const Icon(Icons.add),
+              label: const Text('Create'),
+            ),
           ),
+          const SizedBox(width: AppSpacing.xxs),
         ],
       ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
-            child: TextField(
-              controller: search,
-              onChanged: (_) => setState(() {}),
-              decoration: const InputDecoration(
-                prefixIcon: Icon(Icons.search),
-                hintText: 'Search exercises or functions',
+      body: AppContentFrame(
+        padding: EdgeInsets.zero,
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.md,
+                AppSpacing.xxs,
+                AppSpacing.md,
+                AppSpacing.sm,
+              ),
+              child: Semantics(
+                textField: true,
+                label: 'Search exercises',
+                child: TextField(
+                  controller: search,
+                  focusNode: searchFocus,
+                  onChanged: (_) => setState(() {}),
+                  textInputAction: TextInputAction.search,
+                  decoration: InputDecoration(
+                    prefixIcon: const ExcludeSemantics(
+                      child: Icon(Icons.search),
+                    ),
+                    labelText: 'Search exercises',
+                    hintText: 'Name, muscle, or movement',
+                    suffixIcon: search.text.isEmpty
+                        ? null
+                        : IconButton(
+                            tooltip: 'Clear search',
+                            onPressed: () {
+                              search.clear();
+                              setState(() {});
+                              searchFocus.requestFocus();
+                            },
+                            icon: const Icon(Icons.clear),
+                          ),
+                  ),
+                ),
               ),
             ),
-          ),
-          SizedBox(
-            height: 42,
-            child: ListView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              children: [
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  child: FilterChip(
-                    label: const Text('All muscles'),
-                    selected: muscleId == null,
-                    onSelected: (_) => setState(() {
-                      muscleId = null;
-                      patternId = null;
-                    }),
-                  ),
-                ),
-                ...catalog.muscles.map(
-                  (muscle) => Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    child: FilterChip(
-                      label: Text(muscle.name),
-                      selected: muscleId == muscle.id,
-                      onSelected: (_) => setState(() {
-                        muscleId = muscleId == muscle.id ? null : muscle.id;
-                        patternId = null;
-                      }),
+            _MuscleFilters(
+              catalog: catalog,
+              selectedMuscleId: muscleId,
+              onSelected: (value) => setState(() {
+                muscleId = value;
+                patternId = null;
+              }),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.md,
+                AppSpacing.sm,
+                AppSpacing.md,
+                AppSpacing.xs,
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Semantics(
+                      liveRegion: true,
+                      child: Text(
+                        '${results.length} exercise${results.length == 1 ? '' : 's'}',
+                        style: Theme.of(context).textTheme.titleSmall,
+                      ),
                     ),
                   ),
-                ),
-              ],
+                  OutlinedButton.icon(
+                    onPressed: () => _showFilters(controller),
+                    icon: const Icon(Icons.tune),
+                    label: Text(
+                      activeFilterCount == 0
+                          ? 'Filters'
+                          : 'Filters ($activeFilterCount)',
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-            child: Row(
-              children: [
-                Expanded(
-                  child: DropdownButtonFormField<String?>(
-                    initialValue: patternId,
+            if (activeFilterCount > 0)
+              _ActiveFilters(
+                catalog: catalog,
+                muscleId: muscleId,
+                patternId: patternId,
+                equipment: equipment,
+                onRemove: _removeFilter,
+                onClear: _clearFilters,
+              ),
+            const SizedBox(height: AppSpacing.xxs),
+            Expanded(
+              child: results.isEmpty
+                  ? AppStateView(
+                      icon: Icons.search_off,
+                      title: 'No matching exercises',
+                      message: 'Try a different search or clear filters to see more exercises.',
+                      primaryAction: FilledButton.tonalIcon(
+                        onPressed: _clearSearchAndFilters,
+                        icon: const Icon(Icons.filter_alt_off_outlined),
+                        label: const Text('Clear search and filters'),
+                      ),
+                      secondaryAction: TextButton.icon(
+                        onPressed: () => _createExercise(controller),
+                        icon: const Icon(Icons.add),
+                        label: const Text('Create exercise'),
+                      ),
+                    )
+                  : ListView.separated(
+                      keyboardDismissBehavior:
+                          ScrollViewKeyboardDismissBehavior.onDrag,
+                      padding: const EdgeInsets.fromLTRB(
+                        AppSpacing.sm,
+                        0,
+                        AppSpacing.sm,
+                        AppSpacing.lg,
+                      ),
+                      itemCount: results.length,
+                      separatorBuilder: (_, _) =>
+                          const SizedBox(height: AppSpacing.xs),
+                      itemBuilder: (context, index) {
+                        final exercise = results[index];
+                        return Card(
+                          child: ListTile(
+                            minVerticalPadding: AppSpacing.sm,
+                            leading: ExcludeSemantics(
+                              child: Container(
+                                width: 48,
+                                height: 48,
+                                decoration: BoxDecoration(
+                                  color: context.semanticColors.subtleSurface,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(
+                                  _equipmentIcon(exercise.equipmentType),
+                                  size: AppSizes.iconSmall,
+                                ),
+                              ),
+                            ),
+                            title: Text(exercise.name),
+                            subtitle: Text(exercise.labels.join(' · ')),
+                            isThreeLine: true,
+                            trailing: const ExcludeSemantics(
+                              child: Icon(Icons.add_circle_outline),
+                            ),
+                            onTap: () => _selectExercise(controller, exercise),
+                          ),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _removeFilter(_FilterKind kind) => setState(() {
+    switch (kind) {
+      case _FilterKind.muscle:
+        muscleId = null;
+        patternId = null;
+      case _FilterKind.pattern:
+        patternId = null;
+      case _FilterKind.equipment:
+        equipment = null;
+    }
+  });
+
+  void _clearFilters() => setState(() {
+    muscleId = null;
+    patternId = null;
+    equipment = null;
+  });
+
+  void _clearSearchAndFilters() {
+    search.clear();
+    _clearFilters();
+    searchFocus.requestFocus();
+  }
+
+  Future<void> _showFilters(AppController controller) async {
+    final catalog = controller.catalog;
+    var draftPattern = patternId;
+    var draftEquipment = equipment;
+    final applied = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (context, update) {
+          final patterns = catalog.patternsForMuscle(muscleId);
+          return SafeArea(
+            child: SingleChildScrollView(
+              padding: EdgeInsets.fromLTRB(
+                AppSpacing.md,
+                0,
+                AppSpacing.md,
+                MediaQuery.viewInsetsOf(sheetContext).bottom + AppSpacing.lg,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Filter exercises',
+                    style: Theme.of(context).textTheme.headlineSmall,
+                  ),
+                  const SizedBox(height: AppSpacing.xxs),
+                  Text(
+                    muscleId == null
+                        ? 'Choose a muscle above the results to filter movement patterns.'
+                        : 'Muscle filter is set above the results.',
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  DropdownButtonFormField<String?>(
+                    key: ValueKey('pattern-$draftPattern'),
+                    initialValue: draftPattern,
                     isExpanded: true,
                     decoration: const InputDecoration(
                       labelText: 'Movement pattern',
-                      isDense: true,
                     ),
                     items: [
                       const DropdownMenuItem<String?>(
                         value: null,
-                        child: Text('All patterns'),
+                        child: Text('All movement patterns'),
                       ),
                       ...patterns.map(
                         (pattern) => DropdownMenuItem<String?>(
@@ -127,18 +293,16 @@ class _ExercisePickerScreenState extends ConsumerState<ExercisePickerScreen> {
                         ),
                       ),
                     ],
-                    onChanged: (value) => setState(() => patternId = value),
+                    onChanged: muscleId == null
+                        ? null
+                        : (value) => update(() => draftPattern = value),
                   ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: DropdownButtonFormField<EquipmentType?>(
-                    initialValue: equipment,
+                  const SizedBox(height: AppSpacing.sm),
+                  DropdownButtonFormField<EquipmentType?>(
+                    key: ValueKey('equipment-$draftEquipment'),
+                    initialValue: draftEquipment,
                     isExpanded: true,
-                    decoration: const InputDecoration(
-                      labelText: 'Equipment',
-                      isDense: true,
-                    ),
+                    decoration: const InputDecoration(labelText: 'Equipment'),
                     items: [
                       const DropdownMenuItem<EquipmentType?>(
                         value: null,
@@ -151,264 +315,48 @@ class _ExercisePickerScreenState extends ConsumerState<ExercisePickerScreen> {
                         ),
                       ),
                     ],
-                    onChanged: (value) => setState(() {
-                      equipment = value;
-                      if (value != EquipmentType.machine) manufacturerId = null;
-                    }),
+                    onChanged: (value) => update(() => draftEquipment = value),
                   ),
-                ),
-              ],
-            ),
-          ),
-          if (equipment == EquipmentType.machine)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-              child: DropdownButtonFormField<String?>(
-                initialValue: manufacturerId,
-                decoration: const InputDecoration(
-                  labelText: 'Manufacturer',
-                  isDense: true,
-                ),
-                items: [
-                  const DropdownMenuItem<String?>(
-                    value: null,
-                    child: Text('All manufacturers'),
-                  ),
-                  ...manufacturers.entries.map(
-                    (entry) => DropdownMenuItem<String?>(
-                      value: entry.key,
-                      child: Text(entry.value),
-                    ),
+                  const SizedBox(height: AppSpacing.lg),
+                  Row(
+                    children: [
+                      TextButton(
+                        onPressed: () {
+                          update(() {
+                            draftPattern = null;
+                            draftEquipment = null;
+                          });
+                        },
+                        child: const Text('Reset'),
+                      ),
+                      const Spacer(),
+                      FilledButton(
+                        onPressed: () => Navigator.pop(sheetContext, true),
+                        child: const Text('Apply filters'),
+                      ),
+                    ],
                   ),
                 ],
-                onChanged: (value) => setState(() => manufacturerId = value),
               ),
             ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 6, 20, 8),
-            child: Row(
-              children: [
-                Text(
-                  '${results.length} EXERCISES',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w800,
-                    color: Colors.black54,
-                    letterSpacing: 1,
-                  ),
-                ),
-                const Spacer(),
-                TextButton.icon(
-                  onPressed: () => _createExercise(controller),
-                  icon: const Icon(Icons.add, size: 18),
-                  label: const Text('Create'),
-                ),
-              ],
-            ),
-          ),
-          Expanded(
-            child: results.isEmpty
-                ? const Center(child: Text('No exercises match these filters.'))
-                : ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(12, 0, 12, 24),
-                    itemCount: results.length,
-                    separatorBuilder: (_, _) => const SizedBox(height: 8),
-                    itemBuilder: (context, index) {
-                      final exercise = results[index];
-                      return Card(
-                        child: ListTile(
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 7,
-                          ),
-                          leading: CircleAvatar(
-                            backgroundColor: Theme.of(context)
-                                .colorScheme
-                                .secondaryContainer,
-                            child: Icon(
-                              _equipmentIcon(exercise.equipmentType),
-                              size: 20,
-                            ),
-                          ),
-                          title: Text(
-                            exercise.name,
-                            style: const TextStyle(fontWeight: FontWeight.w700),
-                          ),
-                          subtitle: Text(
-                            '${exercise.muscleGroupName} · ${exercise.movementPatternName}\n${exercise.equipmentType.label}',
-                          ),
-                          isThreeLine: true,
-                          trailing: const Icon(Icons.add),
-                          onTap: () => _selectExercise(controller, exercise),
-                        ),
-                      );
-                    },
-                  ),
-          ),
-        ],
+          );
+        },
       ),
     );
+    if (applied == true && mounted) {
+      setState(() {
+        patternId = draftPattern;
+        equipment = draftEquipment;
+      });
+      searchFocus.requestFocus();
+    }
   }
 
   Future<void> _selectExercise(
     AppController controller,
     ExerciseChoice exercise,
   ) async {
-    var selected = exercise;
-    if (exercise.equipmentType == EquipmentType.machine) {
-      final machine = await _chooseMachine(controller);
-      if (machine == null) return;
-      selected = exercise.withMachine(machine);
-    }
-    final previous = await controller.previousSets(selected);
-    if (!mounted) return;
-    final add = await showModalBottomSheet<bool>(
-      context: context,
-      showDragHandle: true,
-      builder: (context) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                selected.name,
-                style: Theme.of(context).textTheme.headlineSmall
-                    ?.copyWith(fontWeight: FontWeight.w800),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                '${selected.muscleGroupName} · ${selected.movementPatternName}',
-                style: const TextStyle(color: Colors.black54),
-              ),
-              if (selected.machineModel != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 4),
-                  child: Text(
-                    selected.machineModel!.displayName,
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.primary,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-              const SizedBox(height: 20),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.primaryContainer
-                      .withValues(alpha: .45),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Text(
-                  previous.isEmpty
-                      ? 'No previous performance for this setup.'
-                      : 'Last workout: ${_previousSummary(previous, selected, controller.weightUnit)}',
-                ),
-              ),
-              const SizedBox(height: 18),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  onPressed: () => Navigator.pop(context, true),
-                  child: const Text('Add to workout'),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-    if (add == true && mounted) Navigator.pop(context, selected);
-  }
-
-  Future<MachineModelInfo?> _chooseMachine(AppController controller) async {
-    var machines = controller.catalog.machines
-        .where(
-          (machine) =>
-              manufacturerId == null ||
-              machine.manufacturerId == manufacturerId,
-        )
-        .toList();
-    MachineModelInfo? selected;
-    return showDialog<MachineModelInfo>(
-      context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (context, update) => AlertDialog(
-          title: const Text('Choose machine model'),
-          content: SizedBox(
-            width: double.maxFinite,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                DropdownButtonFormField<MachineModelInfo>(
-                  initialValue: selected,
-                  isExpanded: true,
-                  decoration: const InputDecoration(
-                    labelText: 'Manufacturer · model',
-                  ),
-                  items: machines
-                      .map(
-                        (machine) => DropdownMenuItem(
-                          value: machine,
-                          child: Text(
-                            machine.displayName,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: (value) => update(() => selected = value),
-                ),
-                const SizedBox(height: 8),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: TextButton.icon(
-                    onPressed: () async {
-                      final created = await _createMachine(controller);
-                      if (created != null) {
-                        update(() {
-                          machines = [...machines, created];
-                          selected = created;
-                        });
-                      }
-                    },
-                    icon: const Icon(Icons.add),
-                    label: const Text('Add manufacturer or model'),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: selected == null
-                  ? null
-                  : () => Navigator.pop(dialogContext, selected),
-              child: const Text('Continue'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Future<MachineModelInfo?> _createMachine(AppController controller) async {
-    final result = await showDialog<List<String>>(
-      context: context,
-      builder: (context) => const _MachineModelDialog(),
-    );
-    if (result == null || result.any((value) => value.isEmpty)) return null;
-    return controller.addMachineModel(
-      manufacturerName: result[0],
-      modelName: result[1],
-    );
+    Navigator.pop(context, exercise.withEquipmentSelection(null, null));
   }
 
   Future<void> _createExercise(AppController controller) async {
@@ -420,9 +368,127 @@ class _ExercisePickerScreenState extends ConsumerState<ExercisePickerScreen> {
   }
 }
 
+class _MuscleFilters extends StatelessWidget {
+  const _MuscleFilters({
+    required this.catalog,
+    required this.selectedMuscleId,
+    required this.onSelected,
+  });
+
+  final CatalogSnapshot catalog;
+  final String? selectedMuscleId;
+  final ValueChanged<String?> onSelected;
+
+  @override
+  Widget build(BuildContext context) => SingleChildScrollView(
+    scrollDirection: Axis.horizontal,
+    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+    child: Row(
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xxs),
+          child: FilterChip(
+            label: const Text('All muscles'),
+            selected: selectedMuscleId == null,
+            onSelected: (_) => onSelected(null),
+          ),
+        ),
+        ...catalog.muscles.map(
+          (muscle) => Padding(
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xxs),
+            child: FilterChip(
+              label: Text(muscle.name),
+              selected: selectedMuscleId == muscle.id,
+              onSelected: (_) =>
+                  onSelected(selectedMuscleId == muscle.id ? null : muscle.id),
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+enum _FilterKind { muscle, pattern, equipment }
+
+class _ActiveFilters extends StatelessWidget {
+  const _ActiveFilters({
+    required this.catalog,
+    required this.muscleId,
+    required this.patternId,
+    required this.equipment,
+    required this.onRemove,
+    required this.onClear,
+  });
+
+  final CatalogSnapshot catalog;
+  final String? muscleId;
+  final String? patternId;
+  final EquipmentType? equipment;
+  final ValueChanged<_FilterKind> onRemove;
+  final VoidCallback onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    final chips = <Widget>[];
+    if (muscleId != null) {
+      final muscle = catalog.muscles
+          .where((item) => item.id == muscleId)
+          .firstOrNull;
+      if (muscle != null) {
+        chips.add(
+          InputChip(
+            label: Text(muscle.name),
+            onDeleted: () => onRemove(_FilterKind.muscle),
+          ),
+        );
+      }
+    }
+    if (patternId != null) {
+      final pattern = catalog.patterns
+          .where((item) => item.id == patternId)
+          .firstOrNull;
+      if (pattern != null) {
+        chips.add(
+          InputChip(
+            label: Text(pattern.name),
+            onDeleted: () => onRemove(_FilterKind.pattern),
+          ),
+        );
+      }
+    }
+    if (equipment != null) {
+      chips.add(
+        InputChip(
+          label: Text(equipment!.label),
+          onDeleted: () => onRemove(_FilterKind.equipment),
+        ),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Wrap(
+              spacing: AppSpacing.xs,
+              runSpacing: AppSpacing.xxs,
+              children: chips,
+            ),
+          ),
+          TextButton(onPressed: onClear, child: const Text('Clear all')),
+        ],
+      ),
+    );
+  }
+}
+
 class _CreateExerciseDialog extends StatefulWidget {
   const _CreateExerciseDialog({required this.controller});
+
   final AppController controller;
+
   @override
   State<_CreateExerciseDialog> createState() => _CreateExerciseDialogState();
 }
@@ -433,6 +499,8 @@ class _CreateExerciseDialogState extends State<_CreateExerciseDialog> {
   String? pattern;
   EquipmentType equipment = EquipmentType.other;
   bool saving = false;
+  ExerciseExecution? execution;
+  bool independentLimbs = false;
 
   @override
   void dispose() {
@@ -458,7 +526,7 @@ class _CreateExerciseDialogState extends State<_CreateExerciseDialog> {
               textCapitalization: TextCapitalization.words,
               decoration: const InputDecoration(labelText: 'Exercise name'),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpacing.sm),
             DropdownButtonFormField<String>(
               initialValue: muscle,
               isExpanded: true,
@@ -476,7 +544,7 @@ class _CreateExerciseDialogState extends State<_CreateExerciseDialog> {
                 pattern = null;
               }),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpacing.sm),
             DropdownButtonFormField<String>(
               initialValue: pattern,
               isExpanded: true,
@@ -495,7 +563,7 @@ class _CreateExerciseDialogState extends State<_CreateExerciseDialog> {
               alignment: Alignment.centerLeft,
               child: TextButton.icon(
                 onPressed: muscle == null ? null : _addMovementPattern,
-                icon: const Icon(Icons.add, size: 18),
+                icon: const Icon(Icons.add),
                 label: const Text('Add movement pattern'),
               ),
             ),
@@ -511,6 +579,34 @@ class _CreateExerciseDialogState extends State<_CreateExerciseDialog> {
                   .toList(),
               onChanged: (value) =>
                   setState(() => equipment = value ?? EquipmentType.other),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            DropdownButtonFormField<ExerciseExecution?>(
+              initialValue: execution,
+              isExpanded: true,
+              decoration: const InputDecoration(
+                labelText: 'Execution (optional)',
+              ),
+              items: [
+                const DropdownMenuItem<ExerciseExecution?>(
+                  value: null,
+                  child: Text('Unspecified'),
+                ),
+                ...ExerciseExecution.values.map(
+                  (value) => DropdownMenuItem<ExerciseExecution?>(
+                    value: value,
+                    child: Text(value.label),
+                  ),
+                ),
+              ],
+              onChanged: (value) => setState(() => execution = value),
+            ),
+            CheckboxListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Independent arms/legs'),
+              value: independentLimbs,
+              onChanged: (value) =>
+                  setState(() => independentLimbs = value ?? false),
             ),
           ],
         ),
@@ -534,11 +630,12 @@ class _CreateExerciseDialogState extends State<_CreateExerciseDialog> {
                     muscleGroupId: muscle!,
                     movementPatternId: pattern!,
                     equipmentType: equipment,
+                    execution: execution,
+                    independentLimbs: independentLimbs,
                   );
-                  if (!mounted) return;
-                  Navigator.pop(this.context, created);
+                  if (mounted) Navigator.pop(this.context, created);
                 },
-          child: const Text('Create'),
+          child: Text(saving ? 'Creating' : 'Create'),
         ),
       ],
     );
@@ -547,7 +644,7 @@ class _CreateExerciseDialogState extends State<_CreateExerciseDialog> {
   Future<void> _addMovementPattern() async {
     final name = await showDialog<String>(
       context: context,
-      builder: (dialogContext) => const _TextEntryDialog(
+      builder: (context) => const _TextEntryDialog(
         title: 'Add movement pattern',
         label: 'Pattern name',
       ),
@@ -605,94 +702,11 @@ class _TextEntryDialogState extends State<_TextEntryDialog> {
   }
 }
 
-class _MachineModelDialog extends StatefulWidget {
-  const _MachineModelDialog();
-
-  @override
-  State<_MachineModelDialog> createState() => _MachineModelDialogState();
-}
-
-class _MachineModelDialogState extends State<_MachineModelDialog> {
-  final maker = TextEditingController();
-  final model = TextEditingController();
-
-  @override
-  void dispose() {
-    maker.dispose();
-    model.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) => AlertDialog(
-    title: const Text('Add machine model'),
-    content: Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        TextField(
-          controller: maker,
-          textCapitalization: TextCapitalization.words,
-          decoration: const InputDecoration(labelText: 'Manufacturer'),
-        ),
-        const SizedBox(height: 12),
-        TextField(
-          controller: model,
-          textCapitalization: TextCapitalization.words,
-          decoration: const InputDecoration(labelText: 'Model'),
-          onSubmitted: (_) => _submit(),
-        ),
-      ],
-    ),
-    actions: [
-      TextButton(
-        onPressed: () => Navigator.pop(context),
-        child: const Text('Cancel'),
-      ),
-      FilledButton(onPressed: _submit, child: const Text('Add')),
-    ],
-  );
-
-  void _submit() {
-    final manufacturer = maker.text.trim();
-    final modelName = model.text.trim();
-    if (manufacturer.isNotEmpty && modelName.isNotEmpty) {
-      Navigator.pop(context, [manufacturer, modelName]);
-    }
-  }
-}
-
 IconData _equipmentIcon(EquipmentType type) => switch (type) {
   EquipmentType.bodyweight => Icons.accessibility_new,
   EquipmentType.dumbbell => Icons.fitness_center,
   EquipmentType.barbell => Icons.horizontal_rule,
   EquipmentType.machine => Icons.precision_manufacturing_outlined,
+  EquipmentType.cable => Icons.cable,
   EquipmentType.other => Icons.category_outlined,
 };
-
-String _previousSummary(
-  List<PreviousSetSnapshot> sets,
-  ExerciseChoice exercise,
-  WeightUnit unit,
-) {
-  return sets
-      .take(3)
-      .map((set) {
-        final kilograms = exercise.equipmentType == EquipmentType.bodyweight
-            ? set.bodyweightAdjustmentKg
-            : set.loadKg;
-        final load = kilograms == null
-            ? ''
-            : ' × ${_compactPrevious(unit.fromKilograms(kilograms))} ${unit.shortLabel}';
-        final kind =
-            exercise.equipmentType == EquipmentType.bodyweight &&
-                set.adjustment != BodyweightAdjustment.none
-            ? ' ${set.adjustment == BodyweightAdjustment.assisted ? 'assisted' : 'added'}'
-            : '';
-        return '${set.reps}$load$kind';
-      })
-      .join(' · ');
-}
-
-String _compactPrevious(double value) => value == value.roundToDouble()
-    ? '${value.round()}'
-    : value.toStringAsFixed(1);

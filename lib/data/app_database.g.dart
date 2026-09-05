@@ -680,6 +680,32 @@ class $ExerciseVariationsTable extends ExerciseVariations
   final GeneratedDatabase attachedDatabase;
   final String? _alias;
   $ExerciseVariationsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _executionMeta = const VerificationMeta(
+    'execution',
+  );
+  @override
+  late final GeneratedColumn<String> execution = GeneratedColumn<String>(
+    'execution',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _independentLimbsMeta = const VerificationMeta(
+    'independentLimbs',
+  );
+  @override
+  late final GeneratedColumn<bool> independentLimbs = GeneratedColumn<bool>(
+    'independent_limbs',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("independent_limbs" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
   static const VerificationMeta _idMeta = const VerificationMeta('id');
   @override
   late final GeneratedColumn<String> id = GeneratedColumn<String>(
@@ -747,6 +773,8 @@ class $ExerciseVariationsTable extends ExerciseVariations
   );
   @override
   List<GeneratedColumn> get $columns => [
+    execution,
+    independentLimbs,
     id,
     movementPatternId,
     name,
@@ -766,6 +794,21 @@ class $ExerciseVariationsTable extends ExerciseVariations
   }) {
     final context = VerificationContext();
     final data = instance.toColumns(true);
+    if (data.containsKey('execution')) {
+      context.handle(
+        _executionMeta,
+        execution.isAcceptableOrUnknown(data['execution']!, _executionMeta),
+      );
+    }
+    if (data.containsKey('independent_limbs')) {
+      context.handle(
+        _independentLimbsMeta,
+        independentLimbs.isAcceptableOrUnknown(
+          data['independent_limbs']!,
+          _independentLimbsMeta,
+        ),
+      );
+    }
     if (data.containsKey('id')) {
       context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
     } else if (isInserting) {
@@ -824,6 +867,14 @@ class $ExerciseVariationsTable extends ExerciseVariations
   ExerciseVariation map(Map<String, dynamic> data, {String? tablePrefix}) {
     final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
     return ExerciseVariation(
+      execution: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}execution'],
+      ),
+      independentLimbs: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}independent_limbs'],
+      )!,
       id: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}id'],
@@ -859,6 +910,8 @@ class $ExerciseVariationsTable extends ExerciseVariations
 
 class ExerciseVariation extends DataClass
     implements Insertable<ExerciseVariation> {
+  final String? execution;
+  final bool independentLimbs;
   final String id;
   final String movementPatternId;
   final String name;
@@ -866,6 +919,8 @@ class ExerciseVariation extends DataClass
   final String origin;
   final bool archived;
   const ExerciseVariation({
+    this.execution,
+    required this.independentLimbs,
     required this.id,
     required this.movementPatternId,
     required this.name,
@@ -876,6 +931,10 @@ class ExerciseVariation extends DataClass
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
+    if (!nullToAbsent || execution != null) {
+      map['execution'] = Variable<String>(execution);
+    }
+    map['independent_limbs'] = Variable<bool>(independentLimbs);
     map['id'] = Variable<String>(id);
     map['movement_pattern_id'] = Variable<String>(movementPatternId);
     map['name'] = Variable<String>(name);
@@ -887,6 +946,10 @@ class ExerciseVariation extends DataClass
 
   ExerciseVariationsCompanion toCompanion(bool nullToAbsent) {
     return ExerciseVariationsCompanion(
+      execution: execution == null && nullToAbsent
+          ? const Value.absent()
+          : Value(execution),
+      independentLimbs: Value(independentLimbs),
       id: Value(id),
       movementPatternId: Value(movementPatternId),
       name: Value(name),
@@ -902,6 +965,8 @@ class ExerciseVariation extends DataClass
   }) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return ExerciseVariation(
+      execution: serializer.fromJson<String?>(json['execution']),
+      independentLimbs: serializer.fromJson<bool>(json['independentLimbs']),
       id: serializer.fromJson<String>(json['id']),
       movementPatternId: serializer.fromJson<String>(json['movementPatternId']),
       name: serializer.fromJson<String>(json['name']),
@@ -914,6 +979,8 @@ class ExerciseVariation extends DataClass
   Map<String, dynamic> toJson({ValueSerializer? serializer}) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
+      'execution': serializer.toJson<String?>(execution),
+      'independentLimbs': serializer.toJson<bool>(independentLimbs),
       'id': serializer.toJson<String>(id),
       'movementPatternId': serializer.toJson<String>(movementPatternId),
       'name': serializer.toJson<String>(name),
@@ -924,6 +991,8 @@ class ExerciseVariation extends DataClass
   }
 
   ExerciseVariation copyWith({
+    Value<String?> execution = const Value.absent(),
+    bool? independentLimbs,
     String? id,
     String? movementPatternId,
     String? name,
@@ -931,6 +1000,8 @@ class ExerciseVariation extends DataClass
     String? origin,
     bool? archived,
   }) => ExerciseVariation(
+    execution: execution.present ? execution.value : this.execution,
+    independentLimbs: independentLimbs ?? this.independentLimbs,
     id: id ?? this.id,
     movementPatternId: movementPatternId ?? this.movementPatternId,
     name: name ?? this.name,
@@ -940,6 +1011,10 @@ class ExerciseVariation extends DataClass
   );
   ExerciseVariation copyWithCompanion(ExerciseVariationsCompanion data) {
     return ExerciseVariation(
+      execution: data.execution.present ? data.execution.value : this.execution,
+      independentLimbs: data.independentLimbs.present
+          ? data.independentLimbs.value
+          : this.independentLimbs,
       id: data.id.present ? data.id.value : this.id,
       movementPatternId: data.movementPatternId.present
           ? data.movementPatternId.value
@@ -956,6 +1031,8 @@ class ExerciseVariation extends DataClass
   @override
   String toString() {
     return (StringBuffer('ExerciseVariation(')
+          ..write('execution: $execution, ')
+          ..write('independentLimbs: $independentLimbs, ')
           ..write('id: $id, ')
           ..write('movementPatternId: $movementPatternId, ')
           ..write('name: $name, ')
@@ -967,12 +1044,22 @@ class ExerciseVariation extends DataClass
   }
 
   @override
-  int get hashCode =>
-      Object.hash(id, movementPatternId, name, equipmentType, origin, archived);
+  int get hashCode => Object.hash(
+    execution,
+    independentLimbs,
+    id,
+    movementPatternId,
+    name,
+    equipmentType,
+    origin,
+    archived,
+  );
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       (other is ExerciseVariation &&
+          other.execution == this.execution &&
+          other.independentLimbs == this.independentLimbs &&
           other.id == this.id &&
           other.movementPatternId == this.movementPatternId &&
           other.name == this.name &&
@@ -982,6 +1069,8 @@ class ExerciseVariation extends DataClass
 }
 
 class ExerciseVariationsCompanion extends UpdateCompanion<ExerciseVariation> {
+  final Value<String?> execution;
+  final Value<bool> independentLimbs;
   final Value<String> id;
   final Value<String> movementPatternId;
   final Value<String> name;
@@ -990,6 +1079,8 @@ class ExerciseVariationsCompanion extends UpdateCompanion<ExerciseVariation> {
   final Value<bool> archived;
   final Value<int> rowid;
   const ExerciseVariationsCompanion({
+    this.execution = const Value.absent(),
+    this.independentLimbs = const Value.absent(),
     this.id = const Value.absent(),
     this.movementPatternId = const Value.absent(),
     this.name = const Value.absent(),
@@ -999,6 +1090,8 @@ class ExerciseVariationsCompanion extends UpdateCompanion<ExerciseVariation> {
     this.rowid = const Value.absent(),
   });
   ExerciseVariationsCompanion.insert({
+    this.execution = const Value.absent(),
+    this.independentLimbs = const Value.absent(),
     required String id,
     required String movementPatternId,
     required String name,
@@ -1012,6 +1105,8 @@ class ExerciseVariationsCompanion extends UpdateCompanion<ExerciseVariation> {
        equipmentType = Value(equipmentType),
        origin = Value(origin);
   static Insertable<ExerciseVariation> custom({
+    Expression<String>? execution,
+    Expression<bool>? independentLimbs,
     Expression<String>? id,
     Expression<String>? movementPatternId,
     Expression<String>? name,
@@ -1021,6 +1116,8 @@ class ExerciseVariationsCompanion extends UpdateCompanion<ExerciseVariation> {
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
+      if (execution != null) 'execution': execution,
+      if (independentLimbs != null) 'independent_limbs': independentLimbs,
       if (id != null) 'id': id,
       if (movementPatternId != null) 'movement_pattern_id': movementPatternId,
       if (name != null) 'name': name,
@@ -1032,6 +1129,8 @@ class ExerciseVariationsCompanion extends UpdateCompanion<ExerciseVariation> {
   }
 
   ExerciseVariationsCompanion copyWith({
+    Value<String?>? execution,
+    Value<bool>? independentLimbs,
     Value<String>? id,
     Value<String>? movementPatternId,
     Value<String>? name,
@@ -1041,6 +1140,8 @@ class ExerciseVariationsCompanion extends UpdateCompanion<ExerciseVariation> {
     Value<int>? rowid,
   }) {
     return ExerciseVariationsCompanion(
+      execution: execution ?? this.execution,
+      independentLimbs: independentLimbs ?? this.independentLimbs,
       id: id ?? this.id,
       movementPatternId: movementPatternId ?? this.movementPatternId,
       name: name ?? this.name,
@@ -1054,6 +1155,12 @@ class ExerciseVariationsCompanion extends UpdateCompanion<ExerciseVariation> {
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
+    if (execution.present) {
+      map['execution'] = Variable<String>(execution.value);
+    }
+    if (independentLimbs.present) {
+      map['independent_limbs'] = Variable<bool>(independentLimbs.value);
+    }
     if (id.present) {
       map['id'] = Variable<String>(id.value);
     }
@@ -1081,6 +1188,8 @@ class ExerciseVariationsCompanion extends UpdateCompanion<ExerciseVariation> {
   @override
   String toString() {
     return (StringBuffer('ExerciseVariationsCompanion(')
+          ..write('execution: $execution, ')
+          ..write('independentLimbs: $independentLimbs, ')
           ..write('id: $id, ')
           ..write('movementPatternId: $movementPatternId, ')
           ..write('name: $name, ')
@@ -1406,6 +1515,21 @@ class $MachineModelsTable extends MachineModels
   final GeneratedDatabase attachedDatabase;
   final String? _alias;
   $MachineModelsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _independentLimbsMeta = const VerificationMeta(
+    'independentLimbs',
+  );
+  @override
+  late final GeneratedColumn<bool> independentLimbs = GeneratedColumn<bool>(
+    'independent_limbs',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("independent_limbs" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
   static const VerificationMeta _idMeta = const VerificationMeta('id');
   @override
   late final GeneratedColumn<String> id = GeneratedColumn<String>(
@@ -1461,6 +1585,7 @@ class $MachineModelsTable extends MachineModels
   );
   @override
   List<GeneratedColumn> get $columns => [
+    independentLimbs,
     id,
     manufacturerId,
     name,
@@ -1479,6 +1604,15 @@ class $MachineModelsTable extends MachineModels
   }) {
     final context = VerificationContext();
     final data = instance.toColumns(true);
+    if (data.containsKey('independent_limbs')) {
+      context.handle(
+        _independentLimbsMeta,
+        independentLimbs.isAcceptableOrUnknown(
+          data['independent_limbs']!,
+          _independentLimbsMeta,
+        ),
+      );
+    }
     if (data.containsKey('id')) {
       context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
     } else if (isInserting) {
@@ -1526,6 +1660,10 @@ class $MachineModelsTable extends MachineModels
   MachineModel map(Map<String, dynamic> data, {String? tablePrefix}) {
     final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
     return MachineModel(
+      independentLimbs: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}independent_limbs'],
+      )!,
       id: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}id'],
@@ -1556,12 +1694,14 @@ class $MachineModelsTable extends MachineModels
 }
 
 class MachineModel extends DataClass implements Insertable<MachineModel> {
+  final bool independentLimbs;
   final String id;
   final String manufacturerId;
   final String name;
   final String origin;
   final bool archived;
   const MachineModel({
+    required this.independentLimbs,
     required this.id,
     required this.manufacturerId,
     required this.name,
@@ -1571,6 +1711,7 @@ class MachineModel extends DataClass implements Insertable<MachineModel> {
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
+    map['independent_limbs'] = Variable<bool>(independentLimbs);
     map['id'] = Variable<String>(id);
     map['manufacturer_id'] = Variable<String>(manufacturerId);
     map['name'] = Variable<String>(name);
@@ -1581,6 +1722,7 @@ class MachineModel extends DataClass implements Insertable<MachineModel> {
 
   MachineModelsCompanion toCompanion(bool nullToAbsent) {
     return MachineModelsCompanion(
+      independentLimbs: Value(independentLimbs),
       id: Value(id),
       manufacturerId: Value(manufacturerId),
       name: Value(name),
@@ -1595,6 +1737,7 @@ class MachineModel extends DataClass implements Insertable<MachineModel> {
   }) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return MachineModel(
+      independentLimbs: serializer.fromJson<bool>(json['independentLimbs']),
       id: serializer.fromJson<String>(json['id']),
       manufacturerId: serializer.fromJson<String>(json['manufacturerId']),
       name: serializer.fromJson<String>(json['name']),
@@ -1606,6 +1749,7 @@ class MachineModel extends DataClass implements Insertable<MachineModel> {
   Map<String, dynamic> toJson({ValueSerializer? serializer}) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
+      'independentLimbs': serializer.toJson<bool>(independentLimbs),
       'id': serializer.toJson<String>(id),
       'manufacturerId': serializer.toJson<String>(manufacturerId),
       'name': serializer.toJson<String>(name),
@@ -1615,12 +1759,14 @@ class MachineModel extends DataClass implements Insertable<MachineModel> {
   }
 
   MachineModel copyWith({
+    bool? independentLimbs,
     String? id,
     String? manufacturerId,
     String? name,
     String? origin,
     bool? archived,
   }) => MachineModel(
+    independentLimbs: independentLimbs ?? this.independentLimbs,
     id: id ?? this.id,
     manufacturerId: manufacturerId ?? this.manufacturerId,
     name: name ?? this.name,
@@ -1629,6 +1775,9 @@ class MachineModel extends DataClass implements Insertable<MachineModel> {
   );
   MachineModel copyWithCompanion(MachineModelsCompanion data) {
     return MachineModel(
+      independentLimbs: data.independentLimbs.present
+          ? data.independentLimbs.value
+          : this.independentLimbs,
       id: data.id.present ? data.id.value : this.id,
       manufacturerId: data.manufacturerId.present
           ? data.manufacturerId.value
@@ -1642,6 +1791,7 @@ class MachineModel extends DataClass implements Insertable<MachineModel> {
   @override
   String toString() {
     return (StringBuffer('MachineModel(')
+          ..write('independentLimbs: $independentLimbs, ')
           ..write('id: $id, ')
           ..write('manufacturerId: $manufacturerId, ')
           ..write('name: $name, ')
@@ -1652,11 +1802,13 @@ class MachineModel extends DataClass implements Insertable<MachineModel> {
   }
 
   @override
-  int get hashCode => Object.hash(id, manufacturerId, name, origin, archived);
+  int get hashCode =>
+      Object.hash(independentLimbs, id, manufacturerId, name, origin, archived);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       (other is MachineModel &&
+          other.independentLimbs == this.independentLimbs &&
           other.id == this.id &&
           other.manufacturerId == this.manufacturerId &&
           other.name == this.name &&
@@ -1665,6 +1817,7 @@ class MachineModel extends DataClass implements Insertable<MachineModel> {
 }
 
 class MachineModelsCompanion extends UpdateCompanion<MachineModel> {
+  final Value<bool> independentLimbs;
   final Value<String> id;
   final Value<String> manufacturerId;
   final Value<String> name;
@@ -1672,6 +1825,7 @@ class MachineModelsCompanion extends UpdateCompanion<MachineModel> {
   final Value<bool> archived;
   final Value<int> rowid;
   const MachineModelsCompanion({
+    this.independentLimbs = const Value.absent(),
     this.id = const Value.absent(),
     this.manufacturerId = const Value.absent(),
     this.name = const Value.absent(),
@@ -1680,6 +1834,7 @@ class MachineModelsCompanion extends UpdateCompanion<MachineModel> {
     this.rowid = const Value.absent(),
   });
   MachineModelsCompanion.insert({
+    this.independentLimbs = const Value.absent(),
     required String id,
     required String manufacturerId,
     required String name,
@@ -1691,6 +1846,7 @@ class MachineModelsCompanion extends UpdateCompanion<MachineModel> {
        name = Value(name),
        origin = Value(origin);
   static Insertable<MachineModel> custom({
+    Expression<bool>? independentLimbs,
     Expression<String>? id,
     Expression<String>? manufacturerId,
     Expression<String>? name,
@@ -1699,6 +1855,7 @@ class MachineModelsCompanion extends UpdateCompanion<MachineModel> {
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
+      if (independentLimbs != null) 'independent_limbs': independentLimbs,
       if (id != null) 'id': id,
       if (manufacturerId != null) 'manufacturer_id': manufacturerId,
       if (name != null) 'name': name,
@@ -1709,6 +1866,7 @@ class MachineModelsCompanion extends UpdateCompanion<MachineModel> {
   }
 
   MachineModelsCompanion copyWith({
+    Value<bool>? independentLimbs,
     Value<String>? id,
     Value<String>? manufacturerId,
     Value<String>? name,
@@ -1717,6 +1875,7 @@ class MachineModelsCompanion extends UpdateCompanion<MachineModel> {
     Value<int>? rowid,
   }) {
     return MachineModelsCompanion(
+      independentLimbs: independentLimbs ?? this.independentLimbs,
       id: id ?? this.id,
       manufacturerId: manufacturerId ?? this.manufacturerId,
       name: name ?? this.name,
@@ -1729,6 +1888,9 @@ class MachineModelsCompanion extends UpdateCompanion<MachineModel> {
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
+    if (independentLimbs.present) {
+      map['independent_limbs'] = Variable<bool>(independentLimbs.value);
+    }
     if (id.present) {
       map['id'] = Variable<String>(id.value);
     }
@@ -1753,11 +1915,261 @@ class MachineModelsCompanion extends UpdateCompanion<MachineModel> {
   @override
   String toString() {
     return (StringBuffer('MachineModelsCompanion(')
+          ..write('independentLimbs: $independentLimbs, ')
           ..write('id: $id, ')
           ..write('manufacturerId: $manufacturerId, ')
           ..write('name: $name, ')
           ..write('origin: $origin, ')
           ..write('archived: $archived, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $ExerciseMachineCompatibilityTable extends ExerciseMachineCompatibility
+    with
+        TableInfo<
+          $ExerciseMachineCompatibilityTable,
+          ExerciseMachineCompatibilityData
+        > {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ExerciseMachineCompatibilityTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _exerciseVariationIdMeta =
+      const VerificationMeta('exerciseVariationId');
+  @override
+  late final GeneratedColumn<String> exerciseVariationId =
+      GeneratedColumn<String>(
+        'exercise_variation_id',
+        aliasedName,
+        false,
+        type: DriftSqlType.string,
+        requiredDuringInsert: true,
+      );
+  static const VerificationMeta _machineModelIdMeta = const VerificationMeta(
+    'machineModelId',
+  );
+  @override
+  late final GeneratedColumn<String> machineModelId = GeneratedColumn<String>(
+    'machine_model_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [exerciseVariationId, machineModelId];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'exercise_machine_compatibility';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<ExerciseMachineCompatibilityData> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('exercise_variation_id')) {
+      context.handle(
+        _exerciseVariationIdMeta,
+        exerciseVariationId.isAcceptableOrUnknown(
+          data['exercise_variation_id']!,
+          _exerciseVariationIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_exerciseVariationIdMeta);
+    }
+    if (data.containsKey('machine_model_id')) {
+      context.handle(
+        _machineModelIdMeta,
+        machineModelId.isAcceptableOrUnknown(
+          data['machine_model_id']!,
+          _machineModelIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_machineModelIdMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {exerciseVariationId, machineModelId};
+  @override
+  ExerciseMachineCompatibilityData map(
+    Map<String, dynamic> data, {
+    String? tablePrefix,
+  }) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return ExerciseMachineCompatibilityData(
+      exerciseVariationId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}exercise_variation_id'],
+      )!,
+      machineModelId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}machine_model_id'],
+      )!,
+    );
+  }
+
+  @override
+  $ExerciseMachineCompatibilityTable createAlias(String alias) {
+    return $ExerciseMachineCompatibilityTable(attachedDatabase, alias);
+  }
+}
+
+class ExerciseMachineCompatibilityData extends DataClass
+    implements Insertable<ExerciseMachineCompatibilityData> {
+  final String exerciseVariationId;
+  final String machineModelId;
+  const ExerciseMachineCompatibilityData({
+    required this.exerciseVariationId,
+    required this.machineModelId,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['exercise_variation_id'] = Variable<String>(exerciseVariationId);
+    map['machine_model_id'] = Variable<String>(machineModelId);
+    return map;
+  }
+
+  ExerciseMachineCompatibilityCompanion toCompanion(bool nullToAbsent) {
+    return ExerciseMachineCompatibilityCompanion(
+      exerciseVariationId: Value(exerciseVariationId),
+      machineModelId: Value(machineModelId),
+    );
+  }
+
+  factory ExerciseMachineCompatibilityData.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return ExerciseMachineCompatibilityData(
+      exerciseVariationId: serializer.fromJson<String>(
+        json['exerciseVariationId'],
+      ),
+      machineModelId: serializer.fromJson<String>(json['machineModelId']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'exerciseVariationId': serializer.toJson<String>(exerciseVariationId),
+      'machineModelId': serializer.toJson<String>(machineModelId),
+    };
+  }
+
+  ExerciseMachineCompatibilityData copyWith({
+    String? exerciseVariationId,
+    String? machineModelId,
+  }) => ExerciseMachineCompatibilityData(
+    exerciseVariationId: exerciseVariationId ?? this.exerciseVariationId,
+    machineModelId: machineModelId ?? this.machineModelId,
+  );
+  ExerciseMachineCompatibilityData copyWithCompanion(
+    ExerciseMachineCompatibilityCompanion data,
+  ) {
+    return ExerciseMachineCompatibilityData(
+      exerciseVariationId: data.exerciseVariationId.present
+          ? data.exerciseVariationId.value
+          : this.exerciseVariationId,
+      machineModelId: data.machineModelId.present
+          ? data.machineModelId.value
+          : this.machineModelId,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ExerciseMachineCompatibilityData(')
+          ..write('exerciseVariationId: $exerciseVariationId, ')
+          ..write('machineModelId: $machineModelId')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(exerciseVariationId, machineModelId);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ExerciseMachineCompatibilityData &&
+          other.exerciseVariationId == this.exerciseVariationId &&
+          other.machineModelId == this.machineModelId);
+}
+
+class ExerciseMachineCompatibilityCompanion
+    extends UpdateCompanion<ExerciseMachineCompatibilityData> {
+  final Value<String> exerciseVariationId;
+  final Value<String> machineModelId;
+  final Value<int> rowid;
+  const ExerciseMachineCompatibilityCompanion({
+    this.exerciseVariationId = const Value.absent(),
+    this.machineModelId = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  ExerciseMachineCompatibilityCompanion.insert({
+    required String exerciseVariationId,
+    required String machineModelId,
+    this.rowid = const Value.absent(),
+  }) : exerciseVariationId = Value(exerciseVariationId),
+       machineModelId = Value(machineModelId);
+  static Insertable<ExerciseMachineCompatibilityData> custom({
+    Expression<String>? exerciseVariationId,
+    Expression<String>? machineModelId,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (exerciseVariationId != null)
+        'exercise_variation_id': exerciseVariationId,
+      if (machineModelId != null) 'machine_model_id': machineModelId,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  ExerciseMachineCompatibilityCompanion copyWith({
+    Value<String>? exerciseVariationId,
+    Value<String>? machineModelId,
+    Value<int>? rowid,
+  }) {
+    return ExerciseMachineCompatibilityCompanion(
+      exerciseVariationId: exerciseVariationId ?? this.exerciseVariationId,
+      machineModelId: machineModelId ?? this.machineModelId,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (exerciseVariationId.present) {
+      map['exercise_variation_id'] = Variable<String>(
+        exerciseVariationId.value,
+      );
+    }
+    if (machineModelId.present) {
+      map['machine_model_id'] = Variable<String>(machineModelId.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ExerciseMachineCompatibilityCompanion(')
+          ..write('exerciseVariationId: $exerciseVariationId, ')
+          ..write('machineModelId: $machineModelId, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -2448,6 +2860,17 @@ class $WorkoutEntriesTable extends WorkoutEntries
   final GeneratedDatabase attachedDatabase;
   final String? _alias;
   $WorkoutEntriesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _manufacturerIdMeta = const VerificationMeta(
+    'manufacturerId',
+  );
+  @override
+  late final GeneratedColumn<String> manufacturerId = GeneratedColumn<String>(
+    'manufacturer_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _idMeta = const VerificationMeta('id');
   @override
   late final GeneratedColumn<String> id = GeneratedColumn<String>(
@@ -2503,6 +2926,7 @@ class $WorkoutEntriesTable extends WorkoutEntries
   );
   @override
   List<GeneratedColumn> get $columns => [
+    manufacturerId,
     id,
     sessionId,
     exerciseVariationId,
@@ -2521,6 +2945,15 @@ class $WorkoutEntriesTable extends WorkoutEntries
   }) {
     final context = VerificationContext();
     final data = instance.toColumns(true);
+    if (data.containsKey('manufacturer_id')) {
+      context.handle(
+        _manufacturerIdMeta,
+        manufacturerId.isAcceptableOrUnknown(
+          data['manufacturer_id']!,
+          _manufacturerIdMeta,
+        ),
+      );
+    }
     if (data.containsKey('id')) {
       context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
     } else if (isInserting) {
@@ -2571,6 +3004,10 @@ class $WorkoutEntriesTable extends WorkoutEntries
   WorkoutEntry map(Map<String, dynamic> data, {String? tablePrefix}) {
     final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
     return WorkoutEntry(
+      manufacturerId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}manufacturer_id'],
+      ),
       id: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}id'],
@@ -2601,12 +3038,14 @@ class $WorkoutEntriesTable extends WorkoutEntries
 }
 
 class WorkoutEntry extends DataClass implements Insertable<WorkoutEntry> {
+  final String? manufacturerId;
   final String id;
   final String sessionId;
   final String exerciseVariationId;
   final String? machineModelId;
   final int position;
   const WorkoutEntry({
+    this.manufacturerId,
     required this.id,
     required this.sessionId,
     required this.exerciseVariationId,
@@ -2616,6 +3055,9 @@ class WorkoutEntry extends DataClass implements Insertable<WorkoutEntry> {
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
+    if (!nullToAbsent || manufacturerId != null) {
+      map['manufacturer_id'] = Variable<String>(manufacturerId);
+    }
     map['id'] = Variable<String>(id);
     map['session_id'] = Variable<String>(sessionId);
     map['exercise_variation_id'] = Variable<String>(exerciseVariationId);
@@ -2628,6 +3070,9 @@ class WorkoutEntry extends DataClass implements Insertable<WorkoutEntry> {
 
   WorkoutEntriesCompanion toCompanion(bool nullToAbsent) {
     return WorkoutEntriesCompanion(
+      manufacturerId: manufacturerId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(manufacturerId),
       id: Value(id),
       sessionId: Value(sessionId),
       exerciseVariationId: Value(exerciseVariationId),
@@ -2644,6 +3089,7 @@ class WorkoutEntry extends DataClass implements Insertable<WorkoutEntry> {
   }) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return WorkoutEntry(
+      manufacturerId: serializer.fromJson<String?>(json['manufacturerId']),
       id: serializer.fromJson<String>(json['id']),
       sessionId: serializer.fromJson<String>(json['sessionId']),
       exerciseVariationId: serializer.fromJson<String>(
@@ -2657,6 +3103,7 @@ class WorkoutEntry extends DataClass implements Insertable<WorkoutEntry> {
   Map<String, dynamic> toJson({ValueSerializer? serializer}) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
+      'manufacturerId': serializer.toJson<String?>(manufacturerId),
       'id': serializer.toJson<String>(id),
       'sessionId': serializer.toJson<String>(sessionId),
       'exerciseVariationId': serializer.toJson<String>(exerciseVariationId),
@@ -2666,12 +3113,16 @@ class WorkoutEntry extends DataClass implements Insertable<WorkoutEntry> {
   }
 
   WorkoutEntry copyWith({
+    Value<String?> manufacturerId = const Value.absent(),
     String? id,
     String? sessionId,
     String? exerciseVariationId,
     Value<String?> machineModelId = const Value.absent(),
     int? position,
   }) => WorkoutEntry(
+    manufacturerId: manufacturerId.present
+        ? manufacturerId.value
+        : this.manufacturerId,
     id: id ?? this.id,
     sessionId: sessionId ?? this.sessionId,
     exerciseVariationId: exerciseVariationId ?? this.exerciseVariationId,
@@ -2682,6 +3133,9 @@ class WorkoutEntry extends DataClass implements Insertable<WorkoutEntry> {
   );
   WorkoutEntry copyWithCompanion(WorkoutEntriesCompanion data) {
     return WorkoutEntry(
+      manufacturerId: data.manufacturerId.present
+          ? data.manufacturerId.value
+          : this.manufacturerId,
       id: data.id.present ? data.id.value : this.id,
       sessionId: data.sessionId.present ? data.sessionId.value : this.sessionId,
       exerciseVariationId: data.exerciseVariationId.present
@@ -2697,6 +3151,7 @@ class WorkoutEntry extends DataClass implements Insertable<WorkoutEntry> {
   @override
   String toString() {
     return (StringBuffer('WorkoutEntry(')
+          ..write('manufacturerId: $manufacturerId, ')
           ..write('id: $id, ')
           ..write('sessionId: $sessionId, ')
           ..write('exerciseVariationId: $exerciseVariationId, ')
@@ -2707,12 +3162,19 @@ class WorkoutEntry extends DataClass implements Insertable<WorkoutEntry> {
   }
 
   @override
-  int get hashCode =>
-      Object.hash(id, sessionId, exerciseVariationId, machineModelId, position);
+  int get hashCode => Object.hash(
+    manufacturerId,
+    id,
+    sessionId,
+    exerciseVariationId,
+    machineModelId,
+    position,
+  );
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       (other is WorkoutEntry &&
+          other.manufacturerId == this.manufacturerId &&
           other.id == this.id &&
           other.sessionId == this.sessionId &&
           other.exerciseVariationId == this.exerciseVariationId &&
@@ -2721,6 +3183,7 @@ class WorkoutEntry extends DataClass implements Insertable<WorkoutEntry> {
 }
 
 class WorkoutEntriesCompanion extends UpdateCompanion<WorkoutEntry> {
+  final Value<String?> manufacturerId;
   final Value<String> id;
   final Value<String> sessionId;
   final Value<String> exerciseVariationId;
@@ -2728,6 +3191,7 @@ class WorkoutEntriesCompanion extends UpdateCompanion<WorkoutEntry> {
   final Value<int> position;
   final Value<int> rowid;
   const WorkoutEntriesCompanion({
+    this.manufacturerId = const Value.absent(),
     this.id = const Value.absent(),
     this.sessionId = const Value.absent(),
     this.exerciseVariationId = const Value.absent(),
@@ -2736,6 +3200,7 @@ class WorkoutEntriesCompanion extends UpdateCompanion<WorkoutEntry> {
     this.rowid = const Value.absent(),
   });
   WorkoutEntriesCompanion.insert({
+    this.manufacturerId = const Value.absent(),
     required String id,
     required String sessionId,
     required String exerciseVariationId,
@@ -2747,6 +3212,7 @@ class WorkoutEntriesCompanion extends UpdateCompanion<WorkoutEntry> {
        exerciseVariationId = Value(exerciseVariationId),
        position = Value(position);
   static Insertable<WorkoutEntry> custom({
+    Expression<String>? manufacturerId,
     Expression<String>? id,
     Expression<String>? sessionId,
     Expression<String>? exerciseVariationId,
@@ -2755,6 +3221,7 @@ class WorkoutEntriesCompanion extends UpdateCompanion<WorkoutEntry> {
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
+      if (manufacturerId != null) 'manufacturer_id': manufacturerId,
       if (id != null) 'id': id,
       if (sessionId != null) 'session_id': sessionId,
       if (exerciseVariationId != null)
@@ -2766,6 +3233,7 @@ class WorkoutEntriesCompanion extends UpdateCompanion<WorkoutEntry> {
   }
 
   WorkoutEntriesCompanion copyWith({
+    Value<String?>? manufacturerId,
     Value<String>? id,
     Value<String>? sessionId,
     Value<String>? exerciseVariationId,
@@ -2774,6 +3242,7 @@ class WorkoutEntriesCompanion extends UpdateCompanion<WorkoutEntry> {
     Value<int>? rowid,
   }) {
     return WorkoutEntriesCompanion(
+      manufacturerId: manufacturerId ?? this.manufacturerId,
       id: id ?? this.id,
       sessionId: sessionId ?? this.sessionId,
       exerciseVariationId: exerciseVariationId ?? this.exerciseVariationId,
@@ -2786,6 +3255,9 @@ class WorkoutEntriesCompanion extends UpdateCompanion<WorkoutEntry> {
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
+    if (manufacturerId.present) {
+      map['manufacturer_id'] = Variable<String>(manufacturerId.value);
+    }
     if (id.present) {
       map['id'] = Variable<String>(id.value);
     }
@@ -2812,6 +3284,7 @@ class WorkoutEntriesCompanion extends UpdateCompanion<WorkoutEntry> {
   @override
   String toString() {
     return (StringBuffer('WorkoutEntriesCompanion(')
+          ..write('manufacturerId: $manufacturerId, ')
           ..write('id: $id, ')
           ..write('sessionId: $sessionId, ')
           ..write('exerciseVariationId: $exerciseVariationId, ')
@@ -3727,6 +4200,17 @@ class $RoutineExercisesTable extends RoutineExercises
   final GeneratedDatabase attachedDatabase;
   final String? _alias;
   $RoutineExercisesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _manufacturerIdMeta = const VerificationMeta(
+    'manufacturerId',
+  );
+  @override
+  late final GeneratedColumn<String> manufacturerId = GeneratedColumn<String>(
+    'manufacturer_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _idMeta = const VerificationMeta('id');
   @override
   late final GeneratedColumn<String> id = GeneratedColumn<String>(
@@ -3797,6 +4281,7 @@ class $RoutineExercisesTable extends RoutineExercises
   );
   @override
   List<GeneratedColumn> get $columns => [
+    manufacturerId,
     id,
     routineId,
     exerciseVariationId,
@@ -3816,6 +4301,15 @@ class $RoutineExercisesTable extends RoutineExercises
   }) {
     final context = VerificationContext();
     final data = instance.toColumns(true);
+    if (data.containsKey('manufacturer_id')) {
+      context.handle(
+        _manufacturerIdMeta,
+        manufacturerId.isAcceptableOrUnknown(
+          data['manufacturer_id']!,
+          _manufacturerIdMeta,
+        ),
+      );
+    }
     if (data.containsKey('id')) {
       context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
     } else if (isInserting) {
@@ -3872,6 +4366,10 @@ class $RoutineExercisesTable extends RoutineExercises
   RoutineExercise map(Map<String, dynamic> data, {String? tablePrefix}) {
     final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
     return RoutineExercise(
+      manufacturerId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}manufacturer_id'],
+      ),
       id: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}id'],
@@ -3906,6 +4404,7 @@ class $RoutineExercisesTable extends RoutineExercises
 }
 
 class RoutineExercise extends DataClass implements Insertable<RoutineExercise> {
+  final String? manufacturerId;
   final String id;
   final String routineId;
   final String exerciseVariationId;
@@ -3913,6 +4412,7 @@ class RoutineExercise extends DataClass implements Insertable<RoutineExercise> {
   final int position;
   final int setCount;
   const RoutineExercise({
+    this.manufacturerId,
     required this.id,
     required this.routineId,
     required this.exerciseVariationId,
@@ -3923,6 +4423,9 @@ class RoutineExercise extends DataClass implements Insertable<RoutineExercise> {
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
+    if (!nullToAbsent || manufacturerId != null) {
+      map['manufacturer_id'] = Variable<String>(manufacturerId);
+    }
     map['id'] = Variable<String>(id);
     map['routine_id'] = Variable<String>(routineId);
     map['exercise_variation_id'] = Variable<String>(exerciseVariationId);
@@ -3936,6 +4439,9 @@ class RoutineExercise extends DataClass implements Insertable<RoutineExercise> {
 
   RoutineExercisesCompanion toCompanion(bool nullToAbsent) {
     return RoutineExercisesCompanion(
+      manufacturerId: manufacturerId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(manufacturerId),
       id: Value(id),
       routineId: Value(routineId),
       exerciseVariationId: Value(exerciseVariationId),
@@ -3953,6 +4459,7 @@ class RoutineExercise extends DataClass implements Insertable<RoutineExercise> {
   }) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return RoutineExercise(
+      manufacturerId: serializer.fromJson<String?>(json['manufacturerId']),
       id: serializer.fromJson<String>(json['id']),
       routineId: serializer.fromJson<String>(json['routineId']),
       exerciseVariationId: serializer.fromJson<String>(
@@ -3967,6 +4474,7 @@ class RoutineExercise extends DataClass implements Insertable<RoutineExercise> {
   Map<String, dynamic> toJson({ValueSerializer? serializer}) {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
+      'manufacturerId': serializer.toJson<String?>(manufacturerId),
       'id': serializer.toJson<String>(id),
       'routineId': serializer.toJson<String>(routineId),
       'exerciseVariationId': serializer.toJson<String>(exerciseVariationId),
@@ -3977,6 +4485,7 @@ class RoutineExercise extends DataClass implements Insertable<RoutineExercise> {
   }
 
   RoutineExercise copyWith({
+    Value<String?> manufacturerId = const Value.absent(),
     String? id,
     String? routineId,
     String? exerciseVariationId,
@@ -3984,6 +4493,9 @@ class RoutineExercise extends DataClass implements Insertable<RoutineExercise> {
     int? position,
     int? setCount,
   }) => RoutineExercise(
+    manufacturerId: manufacturerId.present
+        ? manufacturerId.value
+        : this.manufacturerId,
     id: id ?? this.id,
     routineId: routineId ?? this.routineId,
     exerciseVariationId: exerciseVariationId ?? this.exerciseVariationId,
@@ -3995,6 +4507,9 @@ class RoutineExercise extends DataClass implements Insertable<RoutineExercise> {
   );
   RoutineExercise copyWithCompanion(RoutineExercisesCompanion data) {
     return RoutineExercise(
+      manufacturerId: data.manufacturerId.present
+          ? data.manufacturerId.value
+          : this.manufacturerId,
       id: data.id.present ? data.id.value : this.id,
       routineId: data.routineId.present ? data.routineId.value : this.routineId,
       exerciseVariationId: data.exerciseVariationId.present
@@ -4011,6 +4526,7 @@ class RoutineExercise extends DataClass implements Insertable<RoutineExercise> {
   @override
   String toString() {
     return (StringBuffer('RoutineExercise(')
+          ..write('manufacturerId: $manufacturerId, ')
           ..write('id: $id, ')
           ..write('routineId: $routineId, ')
           ..write('exerciseVariationId: $exerciseVariationId, ')
@@ -4023,6 +4539,7 @@ class RoutineExercise extends DataClass implements Insertable<RoutineExercise> {
 
   @override
   int get hashCode => Object.hash(
+    manufacturerId,
     id,
     routineId,
     exerciseVariationId,
@@ -4034,6 +4551,7 @@ class RoutineExercise extends DataClass implements Insertable<RoutineExercise> {
   bool operator ==(Object other) =>
       identical(this, other) ||
       (other is RoutineExercise &&
+          other.manufacturerId == this.manufacturerId &&
           other.id == this.id &&
           other.routineId == this.routineId &&
           other.exerciseVariationId == this.exerciseVariationId &&
@@ -4043,6 +4561,7 @@ class RoutineExercise extends DataClass implements Insertable<RoutineExercise> {
 }
 
 class RoutineExercisesCompanion extends UpdateCompanion<RoutineExercise> {
+  final Value<String?> manufacturerId;
   final Value<String> id;
   final Value<String> routineId;
   final Value<String> exerciseVariationId;
@@ -4051,6 +4570,7 @@ class RoutineExercisesCompanion extends UpdateCompanion<RoutineExercise> {
   final Value<int> setCount;
   final Value<int> rowid;
   const RoutineExercisesCompanion({
+    this.manufacturerId = const Value.absent(),
     this.id = const Value.absent(),
     this.routineId = const Value.absent(),
     this.exerciseVariationId = const Value.absent(),
@@ -4060,6 +4580,7 @@ class RoutineExercisesCompanion extends UpdateCompanion<RoutineExercise> {
     this.rowid = const Value.absent(),
   });
   RoutineExercisesCompanion.insert({
+    this.manufacturerId = const Value.absent(),
     required String id,
     required String routineId,
     required String exerciseVariationId,
@@ -4072,6 +4593,7 @@ class RoutineExercisesCompanion extends UpdateCompanion<RoutineExercise> {
        exerciseVariationId = Value(exerciseVariationId),
        position = Value(position);
   static Insertable<RoutineExercise> custom({
+    Expression<String>? manufacturerId,
     Expression<String>? id,
     Expression<String>? routineId,
     Expression<String>? exerciseVariationId,
@@ -4081,6 +4603,7 @@ class RoutineExercisesCompanion extends UpdateCompanion<RoutineExercise> {
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
+      if (manufacturerId != null) 'manufacturer_id': manufacturerId,
       if (id != null) 'id': id,
       if (routineId != null) 'routine_id': routineId,
       if (exerciseVariationId != null)
@@ -4093,6 +4616,7 @@ class RoutineExercisesCompanion extends UpdateCompanion<RoutineExercise> {
   }
 
   RoutineExercisesCompanion copyWith({
+    Value<String?>? manufacturerId,
     Value<String>? id,
     Value<String>? routineId,
     Value<String>? exerciseVariationId,
@@ -4102,6 +4626,7 @@ class RoutineExercisesCompanion extends UpdateCompanion<RoutineExercise> {
     Value<int>? rowid,
   }) {
     return RoutineExercisesCompanion(
+      manufacturerId: manufacturerId ?? this.manufacturerId,
       id: id ?? this.id,
       routineId: routineId ?? this.routineId,
       exerciseVariationId: exerciseVariationId ?? this.exerciseVariationId,
@@ -4115,6 +4640,9 @@ class RoutineExercisesCompanion extends UpdateCompanion<RoutineExercise> {
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
+    if (manufacturerId.present) {
+      map['manufacturer_id'] = Variable<String>(manufacturerId.value);
+    }
     if (id.present) {
       map['id'] = Variable<String>(id.value);
     }
@@ -4144,6 +4672,7 @@ class RoutineExercisesCompanion extends UpdateCompanion<RoutineExercise> {
   @override
   String toString() {
     return (StringBuffer('RoutineExercisesCompanion(')
+          ..write('manufacturerId: $manufacturerId, ')
           ..write('id: $id, ')
           ..write('routineId: $routineId, ')
           ..write('exerciseVariationId: $exerciseVariationId, ')
@@ -4375,6 +4904,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
       $ExerciseVariationsTable(this);
   late final $ManufacturersTable manufacturers = $ManufacturersTable(this);
   late final $MachineModelsTable machineModels = $MachineModelsTable(this);
+  late final $ExerciseMachineCompatibilityTable exerciseMachineCompatibility =
+      $ExerciseMachineCompatibilityTable(this);
   late final $GymLocationsTable gymLocations = $GymLocationsTable(this);
   late final $WorkoutSessionsTable workoutSessions = $WorkoutSessionsTable(
     this,
@@ -4398,6 +4929,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     exerciseVariations,
     manufacturers,
     machineModels,
+    exerciseMachineCompatibility,
     gymLocations,
     workoutSessions,
     workoutEntries,
@@ -4575,7 +5107,16 @@ class $$MuscleGroupsTableTableManager
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map(
+                (e) => (
+                  e.readTable<$MuscleGroupsTable, MuscleGroup>(table),
+                  BaseReferences<
+                    _$AppDatabase,
+                    $MuscleGroupsTable,
+                    MuscleGroup
+                  >(db, table, e),
+                ),
+              )
               .toList(),
           prefetchHooksCallback: null,
         ),
@@ -4783,7 +5324,16 @@ class $$MovementPatternsTableTableManager
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map(
+                (e) => (
+                  e.readTable<$MovementPatternsTable, MovementPattern>(table),
+                  BaseReferences<
+                    _$AppDatabase,
+                    $MovementPatternsTable,
+                    MovementPattern
+                  >(db, table, e),
+                ),
+              )
               .toList(),
           prefetchHooksCallback: null,
         ),
@@ -4809,6 +5359,8 @@ typedef $$MovementPatternsTableProcessedTableManager =
     >;
 typedef $$ExerciseVariationsTableCreateCompanionBuilder =
     ExerciseVariationsCompanion Function({
+      Value<String?> execution,
+      Value<bool> independentLimbs,
       required String id,
       required String movementPatternId,
       required String name,
@@ -4819,6 +5371,8 @@ typedef $$ExerciseVariationsTableCreateCompanionBuilder =
     });
 typedef $$ExerciseVariationsTableUpdateCompanionBuilder =
     ExerciseVariationsCompanion Function({
+      Value<String?> execution,
+      Value<bool> independentLimbs,
       Value<String> id,
       Value<String> movementPatternId,
       Value<String> name,
@@ -4837,6 +5391,16 @@ class $$ExerciseVariationsTableFilterComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
+  ColumnFilters<String> get execution => $composableBuilder(
+    column: $table.execution,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get independentLimbs => $composableBuilder(
+    column: $table.independentLimbs,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<String> get id => $composableBuilder(
     column: $table.id,
     builder: (column) => ColumnFilters(column),
@@ -4877,6 +5441,16 @@ class $$ExerciseVariationsTableOrderingComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
+  ColumnOrderings<String> get execution => $composableBuilder(
+    column: $table.execution,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get independentLimbs => $composableBuilder(
+    column: $table.independentLimbs,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get id => $composableBuilder(
     column: $table.id,
     builder: (column) => ColumnOrderings(column),
@@ -4917,6 +5491,14 @@ class $$ExerciseVariationsTableAnnotationComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
+  GeneratedColumn<String> get execution =>
+      $composableBuilder(column: $table.execution, builder: (column) => column);
+
+  GeneratedColumn<bool> get independentLimbs => $composableBuilder(
+    column: $table.independentLimbs,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<String> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
 
@@ -4980,6 +5562,8 @@ class $$ExerciseVariationsTableTableManager
               ),
           updateCompanionCallback:
               ({
+                Value<String?> execution = const Value.absent(),
+                Value<bool> independentLimbs = const Value.absent(),
                 Value<String> id = const Value.absent(),
                 Value<String> movementPatternId = const Value.absent(),
                 Value<String> name = const Value.absent(),
@@ -4988,6 +5572,8 @@ class $$ExerciseVariationsTableTableManager
                 Value<bool> archived = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => ExerciseVariationsCompanion(
+                execution: execution,
+                independentLimbs: independentLimbs,
                 id: id,
                 movementPatternId: movementPatternId,
                 name: name,
@@ -4998,6 +5584,8 @@ class $$ExerciseVariationsTableTableManager
               ),
           createCompanionCallback:
               ({
+                Value<String?> execution = const Value.absent(),
+                Value<bool> independentLimbs = const Value.absent(),
                 required String id,
                 required String movementPatternId,
                 required String name,
@@ -5006,6 +5594,8 @@ class $$ExerciseVariationsTableTableManager
                 Value<bool> archived = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => ExerciseVariationsCompanion.insert(
+                execution: execution,
+                independentLimbs: independentLimbs,
                 id: id,
                 movementPatternId: movementPatternId,
                 name: name,
@@ -5015,7 +5605,18 @@ class $$ExerciseVariationsTableTableManager
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map(
+                (e) => (
+                  e.readTable<$ExerciseVariationsTable, ExerciseVariation>(
+                    table,
+                  ),
+                  BaseReferences<
+                    _$AppDatabase,
+                    $ExerciseVariationsTable,
+                    ExerciseVariation
+                  >(db, table, e),
+                ),
+              )
               .toList(),
           prefetchHooksCallback: null,
         ),
@@ -5200,7 +5801,16 @@ class $$ManufacturersTableTableManager
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map(
+                (e) => (
+                  e.readTable<$ManufacturersTable, Manufacturer>(table),
+                  BaseReferences<
+                    _$AppDatabase,
+                    $ManufacturersTable,
+                    Manufacturer
+                  >(db, table, e),
+                ),
+              )
               .toList(),
           prefetchHooksCallback: null,
         ),
@@ -5226,6 +5836,7 @@ typedef $$ManufacturersTableProcessedTableManager =
     >;
 typedef $$MachineModelsTableCreateCompanionBuilder =
     MachineModelsCompanion Function({
+      Value<bool> independentLimbs,
       required String id,
       required String manufacturerId,
       required String name,
@@ -5235,6 +5846,7 @@ typedef $$MachineModelsTableCreateCompanionBuilder =
     });
 typedef $$MachineModelsTableUpdateCompanionBuilder =
     MachineModelsCompanion Function({
+      Value<bool> independentLimbs,
       Value<String> id,
       Value<String> manufacturerId,
       Value<String> name,
@@ -5252,6 +5864,11 @@ class $$MachineModelsTableFilterComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
+  ColumnFilters<bool> get independentLimbs => $composableBuilder(
+    column: $table.independentLimbs,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<String> get id => $composableBuilder(
     column: $table.id,
     builder: (column) => ColumnFilters(column),
@@ -5287,6 +5904,11 @@ class $$MachineModelsTableOrderingComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
+  ColumnOrderings<bool> get independentLimbs => $composableBuilder(
+    column: $table.independentLimbs,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get id => $composableBuilder(
     column: $table.id,
     builder: (column) => ColumnOrderings(column),
@@ -5322,6 +5944,11 @@ class $$MachineModelsTableAnnotationComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
+  GeneratedColumn<bool> get independentLimbs => $composableBuilder(
+    column: $table.independentLimbs,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<String> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
 
@@ -5371,6 +5998,7 @@ class $$MachineModelsTableTableManager
               $$MachineModelsTableAnnotationComposer($db: db, $table: table),
           updateCompanionCallback:
               ({
+                Value<bool> independentLimbs = const Value.absent(),
                 Value<String> id = const Value.absent(),
                 Value<String> manufacturerId = const Value.absent(),
                 Value<String> name = const Value.absent(),
@@ -5378,6 +6006,7 @@ class $$MachineModelsTableTableManager
                 Value<bool> archived = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => MachineModelsCompanion(
+                independentLimbs: independentLimbs,
                 id: id,
                 manufacturerId: manufacturerId,
                 name: name,
@@ -5387,6 +6016,7 @@ class $$MachineModelsTableTableManager
               ),
           createCompanionCallback:
               ({
+                Value<bool> independentLimbs = const Value.absent(),
                 required String id,
                 required String manufacturerId,
                 required String name,
@@ -5394,6 +6024,7 @@ class $$MachineModelsTableTableManager
                 Value<bool> archived = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => MachineModelsCompanion.insert(
+                independentLimbs: independentLimbs,
                 id: id,
                 manufacturerId: manufacturerId,
                 name: name,
@@ -5402,7 +6033,16 @@ class $$MachineModelsTableTableManager
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map(
+                (e) => (
+                  e.readTable<$MachineModelsTable, MachineModel>(table),
+                  BaseReferences<
+                    _$AppDatabase,
+                    $MachineModelsTable,
+                    MachineModel
+                  >(db, table, e),
+                ),
+              )
               .toList(),
           prefetchHooksCallback: null,
         ),
@@ -5424,6 +6064,184 @@ typedef $$MachineModelsTableProcessedTableManager =
         BaseReferences<_$AppDatabase, $MachineModelsTable, MachineModel>,
       ),
       MachineModel,
+      PrefetchHooks Function()
+    >;
+typedef $$ExerciseMachineCompatibilityTableCreateCompanionBuilder =
+    ExerciseMachineCompatibilityCompanion Function({
+      required String exerciseVariationId,
+      required String machineModelId,
+      Value<int> rowid,
+    });
+typedef $$ExerciseMachineCompatibilityTableUpdateCompanionBuilder =
+    ExerciseMachineCompatibilityCompanion Function({
+      Value<String> exerciseVariationId,
+      Value<String> machineModelId,
+      Value<int> rowid,
+    });
+
+class $$ExerciseMachineCompatibilityTableFilterComposer
+    extends Composer<_$AppDatabase, $ExerciseMachineCompatibilityTable> {
+  $$ExerciseMachineCompatibilityTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get exerciseVariationId => $composableBuilder(
+    column: $table.exerciseVariationId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get machineModelId => $composableBuilder(
+    column: $table.machineModelId,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$ExerciseMachineCompatibilityTableOrderingComposer
+    extends Composer<_$AppDatabase, $ExerciseMachineCompatibilityTable> {
+  $$ExerciseMachineCompatibilityTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get exerciseVariationId => $composableBuilder(
+    column: $table.exerciseVariationId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get machineModelId => $composableBuilder(
+    column: $table.machineModelId,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$ExerciseMachineCompatibilityTableAnnotationComposer
+    extends Composer<_$AppDatabase, $ExerciseMachineCompatibilityTable> {
+  $$ExerciseMachineCompatibilityTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get exerciseVariationId => $composableBuilder(
+    column: $table.exerciseVariationId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get machineModelId => $composableBuilder(
+    column: $table.machineModelId,
+    builder: (column) => column,
+  );
+}
+
+class $$ExerciseMachineCompatibilityTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $ExerciseMachineCompatibilityTable,
+          ExerciseMachineCompatibilityData,
+          $$ExerciseMachineCompatibilityTableFilterComposer,
+          $$ExerciseMachineCompatibilityTableOrderingComposer,
+          $$ExerciseMachineCompatibilityTableAnnotationComposer,
+          $$ExerciseMachineCompatibilityTableCreateCompanionBuilder,
+          $$ExerciseMachineCompatibilityTableUpdateCompanionBuilder,
+          (
+            ExerciseMachineCompatibilityData,
+            BaseReferences<
+              _$AppDatabase,
+              $ExerciseMachineCompatibilityTable,
+              ExerciseMachineCompatibilityData
+            >,
+          ),
+          ExerciseMachineCompatibilityData,
+          PrefetchHooks Function()
+        > {
+  $$ExerciseMachineCompatibilityTableTableManager(
+    _$AppDatabase db,
+    $ExerciseMachineCompatibilityTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$ExerciseMachineCompatibilityTableFilterComposer(
+                $db: db,
+                $table: table,
+              ),
+          createOrderingComposer: () =>
+              $$ExerciseMachineCompatibilityTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer: () =>
+              $$ExerciseMachineCompatibilityTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> exerciseVariationId = const Value.absent(),
+                Value<String> machineModelId = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => ExerciseMachineCompatibilityCompanion(
+                exerciseVariationId: exerciseVariationId,
+                machineModelId: machineModelId,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String exerciseVariationId,
+                required String machineModelId,
+                Value<int> rowid = const Value.absent(),
+              }) => ExerciseMachineCompatibilityCompanion.insert(
+                exerciseVariationId: exerciseVariationId,
+                machineModelId: machineModelId,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<
+                    $ExerciseMachineCompatibilityTable,
+                    ExerciseMachineCompatibilityData
+                  >(table),
+                  BaseReferences<
+                    _$AppDatabase,
+                    $ExerciseMachineCompatibilityTable,
+                    ExerciseMachineCompatibilityData
+                  >(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$ExerciseMachineCompatibilityTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $ExerciseMachineCompatibilityTable,
+      ExerciseMachineCompatibilityData,
+      $$ExerciseMachineCompatibilityTableFilterComposer,
+      $$ExerciseMachineCompatibilityTableOrderingComposer,
+      $$ExerciseMachineCompatibilityTableAnnotationComposer,
+      $$ExerciseMachineCompatibilityTableCreateCompanionBuilder,
+      $$ExerciseMachineCompatibilityTableUpdateCompanionBuilder,
+      (
+        ExerciseMachineCompatibilityData,
+        BaseReferences<
+          _$AppDatabase,
+          $ExerciseMachineCompatibilityTable,
+          ExerciseMachineCompatibilityData
+        >,
+      ),
+      ExerciseMachineCompatibilityData,
       PrefetchHooks Function()
     >;
 typedef $$GymLocationsTableCreateCompanionBuilder =
@@ -5583,7 +6401,16 @@ class $$GymLocationsTableTableManager
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map(
+                (e) => (
+                  e.readTable<$GymLocationsTable, GymLocation>(table),
+                  BaseReferences<
+                    _$AppDatabase,
+                    $GymLocationsTable,
+                    GymLocation
+                  >(db, table, e),
+                ),
+              )
               .toList(),
           prefetchHooksCallback: null,
         ),
@@ -5793,7 +6620,16 @@ class $$WorkoutSessionsTableTableManager
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map(
+                (e) => (
+                  e.readTable<$WorkoutSessionsTable, WorkoutSession>(table),
+                  BaseReferences<
+                    _$AppDatabase,
+                    $WorkoutSessionsTable,
+                    WorkoutSession
+                  >(db, table, e),
+                ),
+              )
               .toList(),
           prefetchHooksCallback: null,
         ),
@@ -5819,6 +6655,7 @@ typedef $$WorkoutSessionsTableProcessedTableManager =
     >;
 typedef $$WorkoutEntriesTableCreateCompanionBuilder =
     WorkoutEntriesCompanion Function({
+      Value<String?> manufacturerId,
       required String id,
       required String sessionId,
       required String exerciseVariationId,
@@ -5828,6 +6665,7 @@ typedef $$WorkoutEntriesTableCreateCompanionBuilder =
     });
 typedef $$WorkoutEntriesTableUpdateCompanionBuilder =
     WorkoutEntriesCompanion Function({
+      Value<String?> manufacturerId,
       Value<String> id,
       Value<String> sessionId,
       Value<String> exerciseVariationId,
@@ -5845,6 +6683,11 @@ class $$WorkoutEntriesTableFilterComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
+  ColumnFilters<String> get manufacturerId => $composableBuilder(
+    column: $table.manufacturerId,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<String> get id => $composableBuilder(
     column: $table.id,
     builder: (column) => ColumnFilters(column),
@@ -5880,6 +6723,11 @@ class $$WorkoutEntriesTableOrderingComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
+  ColumnOrderings<String> get manufacturerId => $composableBuilder(
+    column: $table.manufacturerId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get id => $composableBuilder(
     column: $table.id,
     builder: (column) => ColumnOrderings(column),
@@ -5915,6 +6763,11 @@ class $$WorkoutEntriesTableAnnotationComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
+  GeneratedColumn<String> get manufacturerId => $composableBuilder(
+    column: $table.manufacturerId,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<String> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
 
@@ -5968,6 +6821,7 @@ class $$WorkoutEntriesTableTableManager
               $$WorkoutEntriesTableAnnotationComposer($db: db, $table: table),
           updateCompanionCallback:
               ({
+                Value<String?> manufacturerId = const Value.absent(),
                 Value<String> id = const Value.absent(),
                 Value<String> sessionId = const Value.absent(),
                 Value<String> exerciseVariationId = const Value.absent(),
@@ -5975,6 +6829,7 @@ class $$WorkoutEntriesTableTableManager
                 Value<int> position = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => WorkoutEntriesCompanion(
+                manufacturerId: manufacturerId,
                 id: id,
                 sessionId: sessionId,
                 exerciseVariationId: exerciseVariationId,
@@ -5984,6 +6839,7 @@ class $$WorkoutEntriesTableTableManager
               ),
           createCompanionCallback:
               ({
+                Value<String?> manufacturerId = const Value.absent(),
                 required String id,
                 required String sessionId,
                 required String exerciseVariationId,
@@ -5991,6 +6847,7 @@ class $$WorkoutEntriesTableTableManager
                 required int position,
                 Value<int> rowid = const Value.absent(),
               }) => WorkoutEntriesCompanion.insert(
+                manufacturerId: manufacturerId,
                 id: id,
                 sessionId: sessionId,
                 exerciseVariationId: exerciseVariationId,
@@ -5999,7 +6856,16 @@ class $$WorkoutEntriesTableTableManager
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map(
+                (e) => (
+                  e.readTable<$WorkoutEntriesTable, WorkoutEntry>(table),
+                  BaseReferences<
+                    _$AppDatabase,
+                    $WorkoutEntriesTable,
+                    WorkoutEntry
+                  >(db, table, e),
+                ),
+              )
               .toList(),
           prefetchHooksCallback: null,
         ),
@@ -6283,7 +7149,16 @@ class $$LoggedSetsTableTableManager
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map(
+                (e) => (
+                  e.readTable<$LoggedSetsTable, LoggedSet>(table),
+                  BaseReferences<_$AppDatabase, $LoggedSetsTable, LoggedSet>(
+                    db,
+                    table,
+                    e,
+                  ),
+                ),
+              )
               .toList(),
           prefetchHooksCallback: null,
         ),
@@ -6542,7 +7417,7 @@ class $$WorkoutRoutinesTableTableManager
           withReferenceMapper: (p0) => p0
               .map(
                 (e) => (
-                  e.readTable(table),
+                  e.readTable<$WorkoutRoutinesTable, WorkoutRoutine>(table),
                   $$WorkoutRoutinesTableReferences(db, table, e),
                 ),
               )
@@ -6599,6 +7474,7 @@ typedef $$WorkoutRoutinesTableProcessedTableManager =
     >;
 typedef $$RoutineExercisesTableCreateCompanionBuilder =
     RoutineExercisesCompanion Function({
+      Value<String?> manufacturerId,
       required String id,
       required String routineId,
       required String exerciseVariationId,
@@ -6609,6 +7485,7 @@ typedef $$RoutineExercisesTableCreateCompanionBuilder =
     });
 typedef $$RoutineExercisesTableUpdateCompanionBuilder =
     RoutineExercisesCompanion Function({
+      Value<String?> manufacturerId,
       Value<String> id,
       Value<String> routineId,
       Value<String> exerciseVariationId,
@@ -6655,6 +7532,11 @@ class $$RoutineExercisesTableFilterComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
+  ColumnFilters<String> get manufacturerId => $composableBuilder(
+    column: $table.manufacturerId,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<String> get id => $composableBuilder(
     column: $table.id,
     builder: (column) => ColumnFilters(column),
@@ -6713,6 +7595,11 @@ class $$RoutineExercisesTableOrderingComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
+  ColumnOrderings<String> get manufacturerId => $composableBuilder(
+    column: $table.manufacturerId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get id => $composableBuilder(
     column: $table.id,
     builder: (column) => ColumnOrderings(column),
@@ -6771,6 +7658,11 @@ class $$RoutineExercisesTableAnnotationComposer
     super.$addJoinBuilderToRootComposer,
     super.$removeJoinBuilderFromRootComposer,
   });
+  GeneratedColumn<String> get manufacturerId => $composableBuilder(
+    column: $table.manufacturerId,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<String> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
 
@@ -6844,6 +7736,7 @@ class $$RoutineExercisesTableTableManager
               $$RoutineExercisesTableAnnotationComposer($db: db, $table: table),
           updateCompanionCallback:
               ({
+                Value<String?> manufacturerId = const Value.absent(),
                 Value<String> id = const Value.absent(),
                 Value<String> routineId = const Value.absent(),
                 Value<String> exerciseVariationId = const Value.absent(),
@@ -6852,6 +7745,7 @@ class $$RoutineExercisesTableTableManager
                 Value<int> setCount = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => RoutineExercisesCompanion(
+                manufacturerId: manufacturerId,
                 id: id,
                 routineId: routineId,
                 exerciseVariationId: exerciseVariationId,
@@ -6862,6 +7756,7 @@ class $$RoutineExercisesTableTableManager
               ),
           createCompanionCallback:
               ({
+                Value<String?> manufacturerId = const Value.absent(),
                 required String id,
                 required String routineId,
                 required String exerciseVariationId,
@@ -6870,6 +7765,7 @@ class $$RoutineExercisesTableTableManager
                 Value<int> setCount = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => RoutineExercisesCompanion.insert(
+                manufacturerId: manufacturerId,
                 id: id,
                 routineId: routineId,
                 exerciseVariationId: exerciseVariationId,
@@ -6881,7 +7777,7 @@ class $$RoutineExercisesTableTableManager
           withReferenceMapper: (p0) => p0
               .map(
                 (e) => (
-                  e.readTable(table),
+                  e.readTable<$RoutineExercisesTable, RoutineExercise>(table),
                   $$RoutineExercisesTableReferences(db, table, e),
                 ),
               )
@@ -7057,7 +7953,16 @@ class $$AppSettingsTableTableManager
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map(
+                (e) => (
+                  e.readTable<$AppSettingsTable, AppSetting>(table),
+                  BaseReferences<_$AppDatabase, $AppSettingsTable, AppSetting>(
+                    db,
+                    table,
+                    e,
+                  ),
+                ),
+              )
               .toList(),
           prefetchHooksCallback: null,
         ),
@@ -7095,6 +8000,12 @@ class $AppDatabaseManager {
       $$ManufacturersTableTableManager(_db, _db.manufacturers);
   $$MachineModelsTableTableManager get machineModels =>
       $$MachineModelsTableTableManager(_db, _db.machineModels);
+  $$ExerciseMachineCompatibilityTableTableManager
+  get exerciseMachineCompatibility =>
+      $$ExerciseMachineCompatibilityTableTableManager(
+        _db,
+        _db.exerciseMachineCompatibility,
+      );
   $$GymLocationsTableTableManager get gymLocations =>
       $$GymLocationsTableTableManager(_db, _db.gymLocations);
   $$WorkoutSessionsTableTableManager get workoutSessions =>

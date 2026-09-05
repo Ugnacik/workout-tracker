@@ -21,13 +21,19 @@ void main() {
         .customSelect('PRAGMA user_version')
         .getSingle();
     final catalog = await repository.loadCatalog();
-    expect(database.schemaVersion, 3);
-    expect(version.read<int>('user_version'), 3);
+    expect(database.schemaVersion, 4);
+    expect(version.read<int>('user_version'), 4);
     expect(
       catalog.exercises.any((item) => item.name == 'Neutral-grip pull-up'),
       isTrue,
     );
     expect((await repository.loadLocations()).single.isDefault, isTrue);
+    expect(await repository.loadThemePreference(), AppThemePreference.dark);
+  });
+
+  test('theme preference persists without a schema change', () async {
+    await repository.setThemePreference(AppThemePreference.light);
+    expect(await repository.loadThemePreference(), AppThemePreference.light);
   });
 
   test('default location changes without losing locations', () async {
